@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuelLog — Login</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+:root {
+  --bg:#0d0f14; --surface:#161920; --surface2:#1e2230;
+  --border:#2a2f3e; --accent:#f0a500; --accent2:#ff6b35;
+  --text:#e8ecf4; --text2:#7a8299; --text3:#4a5168;
+  --shadow: 0 4px 20px rgba(0,0,0,0.4);
+  --radius: 12px;
+  --red: #ef4444; --green: #22c55e;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Subtle animated background grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(240,165,0,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240,165,0,.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* Glow blobs */
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: .18;
+  pointer-events: none;
+}
+.blob-1 { width:350px; height:350px; background:var(--accent);  top:-80px;  left:-80px; }
+.blob-2 { width:300px; height:300px; background:var(--accent2); bottom:-60px; right:-60px; }
+
+/* Card */
+.login-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 40px 36px 36px;
+  width: 90%;
+  max-width: 380px;
+  box-shadow: var(--shadow);
+  z-index: 1;
+}
+
+/* Top accent bar */
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 18px 18px 0 0;
+}
+
+/* Logo */
+.logo-wrap {
+  text-align: center;
+  margin-bottom: 8px;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.7rem;
+  letter-spacing: -.5px;
+}
+.logo span { color: var(--accent); }
+.logo-icon { font-size: 2rem; display: block; margin-bottom: 6px; }
+.tagline {
+  text-align: center;
+  font-size: .78rem;
+  color: var(--text2);
+  margin-bottom: 30px;
+  letter-spacing: .3px;
+}
+
+/* Form */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.form-group label {
+  font-size: .68rem;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  font-weight: 500;
+}
+.form-group input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: .88rem;
+  transition: border-color .2s, box-shadow .2s;
+  outline: none;
+}
+.form-group input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(240,165,0,.1);
+}
+.form-group input::placeholder { color: var(--text3); }
+
+/* Error */
+.error-msg {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.3);
+  color: var(--red);
+  font-size: .78rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+.error-msg.show { display: flex; }
+
+/* Submit button */
+.btn-login {
+  width: 100%;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 11px;
+  border-radius: 8px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: .92rem;
+  cursor: pointer;
+  transition: all .2s;
+  margin-top: 4px;
+  letter-spacing: .3px;
+}
+.btn-login:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(240,165,0,.25);
+}
+.btn-login:active { transform: translateY(0); }
+
+/* Shake animation on error */
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-6px)}
+  40%{transform:translateX(6px)}
+  60%{transform:translateX(-4px)}
+  80%{transform:translateX(4px)}
+}
+.shake { animation: shake .35s ease; }
+
+/* Footer */
+.card-footer {
+  text-align: center;
+  font-size: .7rem;
+  color: var(--text3);
+  margin-top: 22px;
+}
+</style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<div class="login-card" id="loginCard">
+  <div class="logo-wrap">
+    <span class="logo-icon">⛽</span>
+    <div class="logo">Fuel<span>Log</span></div>
+  </div>
+  <p class="tagline">Car Fuel &amp; Service Tracker</p>
+
+  <div class="error-msg" id="errorMsg">
+    <span>⚠</span> Invalid username or password.
+  </div>
+
+  <div class="form-group">
+    <label for="username">Username</label>
+    <input type="text" id="username" placeholder="Enter username" autocomplete="username" />
+  </div>
+
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" />
+  </div>
+
+  <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign In →</button>
+
+  <div class="card-footer">FuelLog &copy; 2025</div>
+</div>
+
+<script>
+  // Allow Enter key to submit
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  function doLogin() {
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value;
+    const card = document.getElementById('loginCard');
+    const err  = document.getElementById('errorMsg');
+
+    if (user === 'Admin' && pass === '727272') {
+      // Store auth flag in sessionStorage (cleared when tab closes)
+      sessionStorage.setItem('fl_auth', '1');
+      // Navigate to the main app
+      window.location.href = 'FuelLog.html';
+    } else {
+      err.classList.add('show');
+      card.classList.remove('shake');
+      // Force reflow so animation restarts if triggered twice
+      void card.offsetWidth;
+      card.classList.add('shake');
+      document.getElementById('password').value = '';
+      document.getElementById('password').focus();
+    }
+  }
+</script>
+</body>
+</html>

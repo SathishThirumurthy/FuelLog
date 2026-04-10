@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuelLog — Car Tracker</title>
+<script>
+  // Auth guard — redirect to login if not authenticated
+  (function(){
+    if(!sessionStorage.getItem('fl_auth')){
+      window.location.replace('index.html');
+    }
+  })();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+/* ── THEMES ──────────────────────────────────────────────── */
+:root {
+  --radius: 12px;
+  --accent2: #ff6b35;
+  --green: #22c55e;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --purple: #a855f7;
+}
+
+/* DARK (default) */
+[data-theme="dark"] {
+  --bg:#0d0f14; --surface:#161920; --surface2:#1e2230;
+  --border:#2a2f3e; --accent:#f0a500;
+  --text:#e8ecf4; --text2:#7a8299; --text3:#4a5168;
+  --shadow: 0 4px 20px rgba(0,0,0,0.4);
+  --chart-grid: rgba(255,255,255,0.04);
+  --nav-active-bg: rgba(240,165,0,0.1); --nav-active-border: rgba(240,165,0,0.3);
+}
+
+/* LIGHT */
+[data-theme="light"] {
+  --bg:#f0f2f7; --surface:#ffffff; --surface2:#f5f6fa;
+  --border:#dde0eb; --accent:#e07b00;
+  --text:#1a1d2e; --text2:#5a6080; --text3:#9ca3c0;
+  --shadow: 0 2px 12px rgba(0,0,0,0.1);
+  --chart-grid: rgba(0,0,0,0.06);
+  --nav-active-bg: rgba(224,123,0,0.08); --nav-active-border: rgba(224,123,0,0.3);
+}
+
+/* OCEAN */
+[data-theme="ocean"] {
+  --bg:#050d1a; --surface:#0a1628; --surface2:#0f1f38;
+  --border:#1a3058; --accent:#38bdf8;
+  --text:#e0f2fe; --text2:#64a0c8; --text3:#2d5a80;
+  --shadow: 0 4px 20px rgba(0,0,0,0.5);
+  --chart-grid: rgba(56,189,248,0.06);
+  --nav-active-bg: rgba(56,189,248,0.1); --nav-active-border: rgba(56,189,248,0.3);
+}
+
+/* FOREST */
+[data-theme="forest"] {
+  --bg:#050f08; --surface:#0a1a0d; --surface2:#102516;
+  --border:#1a3d20; --accent:#4ade80;
+  --text:#dcfce7; --text2:#5a9a6a; --text3:#2a5535;
+  --shadow: 0 4px 20px rgba(0,0,0,0.5);
+  --chart-grid: rgba(74,222,128,0.06);
+  --nav-active-bg: rgba(74,222,128,0.1); --nav-active-border: rgba(74,222,128,0.3);
+}
+
+/* SUNSET */
+[data-theme="sunset"] {
+  --bg:#120808; --surface:#1e0f0f; --surface2:#2a1515;
+  --border:#3d2020; --accent:#fb923c;
+  --text:#fff1e6; --text2:#a06040; --text3:#5a3020;
+  --shadow: 0 4px 20px rgba(0,0,0,0.5);
+  --chart-grid: rgba(251,146,60,0.06);
+  --nav-active-bg: rgba(251,146,60,0.1); --nav-active-border: rgba(251,146,60,0.3);
+}
+
+/* ── BASE ────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; transition: background .3s, color .3s; }
+
+/* ── HEADER ─────────────────────────────────────────────── */
+header { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; gap:10px; flex-wrap:wrap; }
+.logo { font-family:'Syne',sans-serif; font-weight:800; font-size:1.25rem; letter-spacing:-.5px; }
+.logo span { color:var(--accent); }
+.header-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.header-right select, .header-right button { background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:.82rem; cursor:pointer; transition:all .2s; }
+.header-right button:hover { border-color:var(--accent); color:var(--accent); }
+.active-badge { display:flex; align-items:center; gap:5px; font-size:.76rem; color:var(--green); background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.3); padding:5px 10px; border-radius:20px; font-weight:500; }
+.btn-logout { background:none; border:1px solid var(--border); color:var(--text2); padding:5px 12px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:.78rem; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:5px; }
+.btn-logout:hover { border-color:var(--red); color:var(--red); }
+
+/* Theme picker */
+.theme-picker { display:flex; align-items:center; gap:5px; }
+.theme-swatch { width:20px; height:20px; border-radius:50%; cursor:pointer; border:2px solid transparent; transition:all .2s; flex-shrink:0; }
+.theme-swatch:hover, .theme-swatch.active { border-color:var(--text); transform:scale(1.2); }
+.theme-swatch[data-t="dark"]   { background:linear-gradient(135deg,#0d0f14,#f0a500); }
+.theme-swatch[data-t="light"]  { background:linear-gradient(135deg,#f0f2f7,#e07b00); }
+.theme-swatch[data-t="ocean"]  { background:linear-gradient(135deg,#050d1a,#38bdf8); }
+.theme-swatch[data-t="forest"] { background:linear-gradient(135deg,#050f08,#4ade80); }
+.theme-swatch[data-t="sunset"] { background:linear-gradient(135deg,#120808,#fb923c); }
+
+/* ── NAV ────────────────────────────────────────────────── */
+nav { display:flex; gap:4px; padding:8px 24px; border-bottom:1px solid var(--border); background:var(--surface); overflow-x:auto; }
+nav button { background:none; border:1px solid transparent; color:var(--text2); padding:6px 14px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:.82rem; font-weight:500; cursor:pointer; white-space:nowrap; transition:all .2s; }
+nav button:hover { color:var(--text); background:var(--surface2); }
+nav button.active { color:var(--accent); background:var(--nav-active-bg); border-color:var(--nav-active-border); }
+
+/* ── MAIN ───────────────────────────────────────────────── */
+main { padding:20px 24px; max-width:1400px; margin:0 auto; }
+.page { display:none; } .page.active { display:block; }
+
+/* ── STATS ──────────────────────────────────────────────── */
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:18px; }
+.stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:15px; position:relative; overflow:hidden; transition:border-color .2s, box-shadow .2s; }
+.stat-card:hover { border-color:var(--accent); box-shadow:var(--shadow); }
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+.stat-card.blue::before { background:linear-gradient(90deg,var(--blue),var(--purple)); }
+.stat-card.green::before { background:linear-gradient(90deg,var(--green),#06b6d4); }
+.stat-label { font-size:.7rem; color:var(--text2); text-transform:uppercase; letter-spacing:.8px; margin-bottom:6px; }
+.stat-value { font-family:'Syne',sans-serif; font-size:1.45rem; font-weight:700; }
+.stat-sub { font-size:.7rem; color:var(--text2); margin-top:3px; }
+
+/* ── CHARTS ─────────────────────────────────────────────── */
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
+.chart-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.chart-card.full { grid-column:1/-1; }
+.chart-title { font-family:'Syne',sans-serif; font-size:.88rem; font-weight:600; margin-bottom:12px; }
+.chart-title span { color:var(--text2); font-size:.76rem; font-weight:400; }
+.chart-wrap { position:relative; height:195px; }
+
+/* ── TABLE ──────────────────────────────────────────────── */
+.section-title { font-family:'Syne',sans-serif; font-size:.95rem; font-weight:700; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.table-controls { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+.search-box { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:.82rem; width:175px; transition:border-color .2s; }
+.search-box:focus { outline:none; border-color:var(--accent); }
+.filter-select { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:.82rem; cursor:pointer; }
+.table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:18px; }
+.data-table { width:100%; border-collapse:collapse; }
+.data-table th { background:var(--surface2); color:var(--text2); font-size:.68rem; text-transform:uppercase; letter-spacing:.6px; padding:9px 12px; text-align:left; font-weight:500; white-space:nowrap; }
+.data-table td { padding:9px 12px; font-size:.82rem; border-top:1px solid var(--border); font-family:'DM Mono',monospace; white-space:nowrap; }
+.data-table tr:hover td { background:var(--surface2); }
+.place-cell, .remarks-cell { font-family:'DM Sans',sans-serif !important; color:var(--text2); }
+.remarks-cell { max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+.eff-good { color:var(--green); } .eff-avg { color:var(--accent); } .eff-bad { color:var(--red); }
+.row-actions { display:flex; gap:5px; }
+.btn-icon { background:none; border:1px solid var(--border); color:var(--text2); width:26px; height:26px; border-radius:6px; cursor:pointer; font-size:.72rem; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.btn-icon:hover { border-color:var(--accent); color:var(--accent); }
+.btn-icon.del:hover { border-color:var(--red); color:var(--red); }
+.pagination { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--surface2); font-size:.76rem; color:var(--text2); border-top:1px solid var(--border); }
+.pg-buttons { display:flex; gap:3px; }
+.pg-btn { background:var(--surface); border:1px solid var(--border); color:var(--text2); width:27px; height:27px; border-radius:6px; cursor:pointer; font-size:.76rem; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.pg-btn:hover,.pg-btn.active { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+.pg-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+/* ── FORMS ──────────────────────────────────────────────── */
+.form-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:22px; max-width:680px; }
+.form-title { font-family:'Syne',sans-serif; font-size:.95rem; font-weight:700; margin-bottom:18px; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:13px; }
+.form-group { display:flex; flex-direction:column; gap:5px; }
+.form-group.full { grid-column:1/-1; }
+.form-group label { font-size:.7rem; color:var(--text2); text-transform:uppercase; letter-spacing:.6px; }
+.form-group input, .form-group select, .form-group textarea { background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:8px; font-family:'DM Mono',monospace; font-size:.87rem; transition:border-color .2s; }
+.form-group textarea { resize:vertical; min-height:65px; font-family:'DM Sans',sans-serif; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:var(--accent); }
+.form-group input::placeholder, .form-group textarea::placeholder { color:var(--text3); }
+.form-preview { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-top:13px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.preview-item .lbl { color:var(--text2); font-size:.66rem; text-transform:uppercase; margin-bottom:3px; }
+.preview-item .val { font-family:'Syne',sans-serif; font-weight:600; font-size:.9rem; }
+.form-actions { display:flex; gap:9px; margin-top:16px; }
+.btn-primary { background:var(--accent); color:#000; border:none; padding:9px 20px; border-radius:8px; font-family:'Syne',sans-serif; font-weight:700; font-size:.87rem; cursor:pointer; transition:all .2s; }
+.btn-primary:hover { filter:brightness(1.1); transform:translateY(-1px); }
+.btn-secondary { background:none; color:var(--text2); border:1px solid var(--border); padding:9px 20px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:.87rem; cursor:pointer; transition:all .2s; }
+.btn-secondary:hover { border-color:var(--text2); color:var(--text); }
+
+/* ── REPORTS ────────────────────────────────────────────── */
+.report-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
+.report-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.report-card.full { grid-column:1/-1; }
+.report-title { font-family:'Syne',sans-serif; font-size:.88rem; font-weight:700; margin-bottom:12px; }
+.year-list { display:flex; flex-direction:column; gap:7px; }
+.year-item { display:flex; align-items:center; gap:9px; padding:8px 10px; background:var(--surface2); border-radius:8px; border:1px solid var(--border); }
+.year-badge { font-family:'Syne',sans-serif; font-weight:700; font-size:.86rem; color:var(--accent); min-width:40px; }
+.year-bar-wrap { flex:1; height:5px; background:var(--border); border-radius:3px; overflow:hidden; }
+.year-bar { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:3px; }
+.year-km { font-family:'DM Mono',monospace; font-size:.76rem; color:var(--text2); min-width:72px; text-align:right; }
+.top-places { display:flex; flex-direction:column; gap:6px; }
+.place-row { display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--surface2); border-radius:8px; font-size:.82rem; }
+
+/* ── TOAST & MODAL ─────────────────────────────────────── */
+.toast { position:fixed; bottom:20px; right:20px; background:var(--surface2); border:1px solid var(--accent); color:var(--text); padding:10px 16px; border-radius:10px; font-size:.82rem; transform:translateY(80px); opacity:0; transition:all .3s; z-index:999; display:flex; align-items:center; gap:8px; box-shadow:var(--shadow); }
+.toast.show { transform:translateY(0); opacity:1; }
+.toast.error { border-color:var(--red); }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; display:none; align-items:center; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; width:90%; max-width:520px; box-shadow:var(--shadow); }
+.modal-title { font-family:'Syne',sans-serif; font-size:.95rem; font-weight:700; margin-bottom:16px; }
+.modal-actions { display:flex; gap:9px; justify-content:flex-end; margin-top:16px; }
+
+/* Country toggle */
+.country-toggle { display:flex; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.country-btn { flex:1; padding:8px; background:var(--surface2); border:none; color:var(--text2); font-family:'DM Sans',sans-serif; font-size:.85rem; cursor:pointer; transition:all .2s; }
+.country-btn.active { background:var(--accent); color:#000; font-weight:600; }
+
+/* ── CARS PAGE ──────────────────────────────────────────── */
+.add-car-area { border:2px dashed var(--border); border-radius:var(--radius); padding:24px; text-align:center; color:var(--text2); cursor:pointer; transition:all .2s; max-width:680px; margin-top:16px; }
+.add-car-area:hover { border-color:var(--accent); color:var(--accent); }
+.badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:.68rem; font-weight:600; font-family:'DM Mono',monospace; }
+.badge-sold { background:rgba(239,68,68,.15); color:var(--red); }
+.badge-active { background:rgba(34,197,94,.15); color:var(--green); }
+.badge-current { background:rgba(240,165,0,.15); color:var(--accent); }
+.badge-in { background:rgba(255,153,0,.15); color:#ff9900; }
+.badge-us { background:rgba(59,130,246,.15); color:var(--blue); }
+.empty-state { text-align:center; padding:36px 20px; color:var(--text2); font-size:.86rem; }
+.empty-state .emoji { font-size:2rem; margin-bottom:8px; }
+.car-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; max-width:680px; margin-bottom:13px; transition:border-color .2s; }
+.car-card.is-current { border-color:rgba(240,165,0,.4); box-shadow:0 0 0 1px rgba(240,165,0,.1); }
+.svc-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:10px 0; background:var(--surface2); border-radius:8px; padding:11px; }
+.svc-summary-item .lbl { font-size:.66rem; color:var(--text2); text-transform:uppercase; margin-bottom:2px; }
+.svc-summary-item .val { font-family:'DM Mono',monospace; font-size:.86rem; }
+.car-note { font-size:.76rem; color:var(--text2); background:var(--surface2); padding:7px 10px; border-radius:6px; margin-top:8px; }
+.entry-note { font-size:.78rem; color:var(--accent); margin-bottom:12px; padding:8px 11px; background:rgba(240,165,0,.06); border-radius:8px; border:1px solid rgba(240,165,0,.2); }
+
+/* ── RESPONSIVE ─────────────────────────────────────────── */
+@media(max-width:768px){
+  main{padding:12px} header{padding:11px 14px} nav{padding:7px 12px}
+  .chart-grid,.report-grid{grid-template-columns:1fr}
+  .chart-card.full,.report-card.full{grid-column:auto}
+  .form-grid{grid-template-columns:1fr} .form-group.full{grid-column:auto}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body data-theme="dark">
+
+<header>
+  <div class="logo">Fuel<span>Log</span></div>
+  <div class="header-right">
+    <div class="active-badge">🚗 <span id="activeCarName">—</span></div>
+    <select id="viewCarSelect" onchange="switchViewCar(this.value)"></select>
+    <!-- Theme picker -->
+    <div class="theme-picker" title="Choose theme">
+      <div class="theme-swatch active" data-t="dark"   onclick="setTheme('dark')"   title="Dark"></div>
+      <div class="theme-swatch"        data-t="light"  onclick="setTheme('light')"  title="Light"></div>
+      <div class="theme-swatch"        data-t="ocean"  onclick="setTheme('ocean')"  title="Ocean"></div>
+      <div class="theme-swatch"        data-t="forest" onclick="setTheme('forest')" title="Forest"></div>
+      <div class="theme-swatch"        data-t="sunset" onclick="setTheme('sunset')" title="Sunset"></div>
+    </div>
+    <button onclick="showNewCarModal()">＋ New Car</button>
+    <button class="btn-logout" onclick="doLogout()" title="Sign out">⏻ Logout</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('dashboard',this)">📊 Dashboard</button>
+  <button onclick="showPage('entries',this)">📋 Entries</button>
+  <button onclick="showPage('addEntry',this)">➕ Add Entry</button>
+  <button onclick="showPage('service',this)">🔧 Service</button>
+  <button onclick="showPage('reports',this)">📈 Reports</button>
+  <button onclick="showPage('cars',this)">🚗 Cars</button>
+</nav>
+
+<main>
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <div class="stats-grid" id="statsGrid"></div>
+  <div class="chart-grid">
+    <div class="chart-card full">
+      <div class="chart-title" id="chartSpendTitle">Monthly Fuel Spend</div>
+      <div class="chart-wrap"><canvas id="chartSpend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title" id="chartMileageTitle">Efficiency Trend</div>
+      <div class="chart-wrap"><canvas id="chartMileage"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title" id="chartPriceTitle">Fuel Price History</div>
+      <div class="chart-wrap"><canvas id="chartPrice"></canvas></div>
+    </div>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">Service Spend by Year</div>
+      <div class="chart-wrap"><canvas id="chartServiceSpend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Recent Services <span>last 5</span></div>
+      <div id="recentService"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ENTRIES -->
+<div id="page-entries" class="page">
+  <div class="section-title">
+    All Fuel Entries
+    <div class="table-controls">
+      <input type="text" class="search-box" id="searchBox" placeholder="Search place..." oninput="renderTable()">
+      <select class="filter-select" id="yearFilter" onchange="renderTable()"><option value="">All Years</option></select>
+      <button class="btn-secondary" onclick="exportCSV()" style="padding:6px 12px;font-size:.79rem">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr id="entriesTableHead"></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="pagination"><span id="pgInfo"></span><div class="pg-buttons" id="pgButtons"></div></div>
+  </div>
+</div>
+
+<!-- ADD FUEL ENTRY -->
+<div id="page-addEntry" class="page">
+  <div class="form-card">
+    <div class="form-title" id="formTitle">➕ Add Fuel Entry</div>
+    <div class="entry-note" id="entryCarNote"></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Date</label><input type="date" id="fDate" oninput="updatePreview()"></div>
+      <div class="form-group"><label id="fKmLabel">Odometer</label><input type="number" id="fKm" placeholder="e.g. 45320" oninput="updatePreview()"></div>
+      <div class="form-group"><label id="fFuelLabel">Fuel</label><input type="number" id="fFuel" placeholder="e.g. 28.50" step="0.01" oninput="updatePreview()"></div>
+      <div class="form-group"><label id="fPriceLabel">Price per unit</label><input type="number" id="fPrice" placeholder="e.g. 91.50" step="0.01" oninput="updatePreview()"></div>
+      <div class="form-group full"><label>Fuel Station / Place</label><input type="text" id="fPlace" list="placeList"><datalist id="placeList"></datalist></div>
+    </div>
+    <div class="form-preview">
+      <div class="preview-item"><div class="lbl" id="prevDistLabel">Distance</div><div class="val" id="prevDist">—</div></div>
+      <div class="preview-item"><div class="lbl" id="prevEffLabel">Efficiency</div><div class="val" id="prevMileage">—</div></div>
+      <div class="preview-item"><div class="lbl">Amount</div><div class="val" id="prevAmount">—</div></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" onclick="saveEntry()">Save Entry</button>
+      <button class="btn-secondary" onclick="resetForm()">Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- SERVICE -->
+<div id="page-service" class="page">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+    <div class="form-card">
+      <div class="form-title" id="svcFormTitle">🔧 Add Service Entry</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Date</label><input type="date" id="sDate"></div>
+        <div class="form-group"><label id="sKmLabel">Odometer</label><input type="number" id="sKm" placeholder="e.g. 45320"></div>
+        <div class="form-group full"><label id="sAmountLabel">Amount</label><input type="number" id="sAmount" placeholder="e.g. 3500" step="0.01"></div>
+        <div class="form-group full"><label>Remarks / Work Done</label><textarea id="sRemarks" placeholder="e.g. Oil change, tyre rotation..."></textarea></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" onclick="saveService()">Save Service</button>
+        <button class="btn-secondary" onclick="resetServiceForm()">Clear</button>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Service History</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr id="svcTableHead"></tr></thead>
+          <tbody id="serviceTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REPORTS -->
+<div id="page-reports" class="page">
+  <div class="report-grid">
+    <div class="report-card"><div class="report-title" id="reportKmTitle">Distance by Year</div><div class="year-list" id="yearList"></div></div>
+    <div class="report-card"><div class="report-title">Fuel Spend by Year</div><div class="year-list" id="spendList"></div></div>
+    <div class="report-card full">
+      <div class="report-title">Yearly Summary</div>
+      <div class="table-wrap" style="margin-bottom:0">
+        <table class="data-table">
+          <thead><tr id="yearTableHead"></tr></thead>
+          <tbody id="yearTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="report-card"><div class="report-title">Top Fuel Stations</div><div class="top-places" id="topPlaces"></div></div>
+    <div class="report-card">
+      <div class="chart-title" id="yearMileageChartTitle" style="font-family:Syne,sans-serif;font-weight:700;font-size:.88rem;margin-bottom:12px">Avg Efficiency by Year</div>
+      <div class="chart-wrap"><canvas id="chartYearMileage"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- CARS -->
+<div id="page-cars" class="page">
+  <div id="carsList"></div>
+  <div class="add-car-area" onclick="showNewCarModal()">
+    <div style="font-size:1.8rem;margin-bottom:7px">🚗</div>
+    <div style="font-weight:500;margin-bottom:3px">Add a New Car</div>
+    <div style="font-size:.78rem">India (₹, km, L) or USA ($, mi, gal)</div>
+  </div>
+</div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- NEW CAR MODAL -->
+<div class="modal-overlay" id="newCarModal">
+  <div class="modal">
+    <div class="modal-title">🚗 Add New Car</div>
+    <div class="form-grid" style="gap:12px">
+      <div class="form-group full">
+        <label>Country / Units</label>
+        <div class="country-toggle">
+          <button class="country-btn active" id="btnIN" onclick="selectCountry('IN')">🇮🇳 India (₹ · km · L · km/L)</button>
+          <button class="country-btn" id="btnUS" onclick="selectCountry('US')">🇺🇸 USA ($ · mi · gal · MPG)</button>
+        </div>
+        <input type="hidden" id="ncCountry" value="IN">
+      </div>
+      <div class="form-group full"><label>Car Name</label><input type="text" id="ncName" placeholder="e.g. Honda Civic"></div>
+      <div class="form-group"><label>Purchase Date</label><input type="date" id="ncPurchased"></div>
+      <div class="form-group"><label>Registration No. (optional)</label><input type="text" id="ncReg" placeholder="e.g. KA 01 AB 1234"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('newCarModal')">Cancel</button>
+      <button class="btn-primary" onclick="addNewCar()">Add Car</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE FUEL MODAL -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <div class="modal-title">🗑 Delete Entry?</div>
+    <p style="color:var(--text2);font-size:.84rem;line-height:1.5">This will permanently remove this fuel entry.</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('deleteModal')">Cancel</button>
+      <button class="btn-primary" style="background:var(--red)" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE SVC MODAL -->
+<div class="modal-overlay" id="deleteSvcModal">
+  <div class="modal">
+    <div class="modal-title">🗑 Delete Service Entry?</div>
+    <p style="color:var(--text2);font-size:.84rem;line-height:1.5">This will permanently remove this service entry.</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('deleteSvcModal')">Cancel</button>
+      <button class="btn-primary" style="background:var(--red)" onclick="confirmDeleteSvc()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────
+const STORAGE_KEY = 'fuellog_data_v4';
+const THEME_KEY   = 'fuellog_theme';
+const SEED_DATA = {"cars":[{"id":"baleno","name":"Maruti Baleno","purchased":"2016-09-22","sold":"2025-11-09","note":"Name transfer: 2026-02-13","country":"IN","active":true}],"entries":{"baleno":[{"id":"b1","date":"2016-09-30","km":0,"fuel":10,"price":0,"total_km":null,"mileage":null,"amount":null,"place":""},{"id":"b2","date":"2016-09-30","km":0,"fuel":10,"price":56.25,"total_km":null,"mileage":null,"amount":562.5,"place":""},{"id":"b3","date":"2016-10-06","km":336,"fuel":28.78,"price":56.26,"total_km":null,"mileage":null,"amount":1619.16,"place":""},{"id":"b4","date":"2016-10-15","km":955,"fuel":27.57,"price":56.75,"total_km":619,"mileage":22.45,"amount":1564.6,"place":""},{"id":"b5","date":"2016-10-19","km":1587,"fuel":27.39,"price":57.5,"total_km":632,"mileage":23.07,"amount":1574.92,"place":""},{"id":"b6","date":"2016-10-28","km":2259,"fuel":29.8,"price":59.21,"total_km":672,"mileage":22.55,"amount":1764.46,"place":""},{"id":"b7","date":"2016-11-11","km":2873,"fuel":30.68,"price":60.36,"total_km":614,"mileage":20.01,"amount":1851.84,"place":""},{"id":"b8","date":"2016-11-24","km":3435,"fuel":28.95,"price":58.75,"total_km":562,"mileage":19.41,"amount":1700.81,"place":""},{"id":"b9","date":"2016-12-07","km":4036,"fuel":30.93,"price":58.35,"total_km":601,"mileage":19.43,"amount":1804.77,"place":""},{"id":"b10","date":"2016-12-17","km":4603,"fuel":28.66,"price":60.6,"total_km":567,"mileage":19.78,"amount":1736.8,"place":""},{"id":"b11","date":"2016-12-24","km":5067,"fuel":20.39,"price":59.72,"total_km":464,"mileage":22.76,"amount":1217.69,"place":""},{"id":"b12","date":"2016-12-25","km":5534,"fuel":20.36,"price":58.98,"total_km":467,"mileage":22.94,"amount":1200.83,"place":""},{"id":"b13","date":"2016-12-31","km":6029,"fuel":22.7,"price":60.7,"total_km":495,"mileage":21.81,"amount":1377.89,"place":""},{"id":"b14","date":"2017-01-08","km":6496,"fuel":22.17,"price":61.82,"total_km":467,"mileage":21.06,"amount":1370.55,"place":""},{"id":"b15","date":"2017-01-20","km":7121,"fuel":29.03,"price":63.15,"total_km":625,"mileage":21.53,"amount":1833.24,"place":""},{"id":"b16","date":"2017-02-02","km":7729,"fuel":29.44,"price":63.16,"total_km":608,"mileage":20.65,"amount":1859.43,"place":""},{"id":"b17","date":"2017-02-15","km":8364,"fuel":31.51,"price":63.16,"total_km":635,"mileage":20.15,"amount":1990.17,"place":""},{"id":"b18","date":"2017-02-26","km":8960,"fuel":28.6,"price":63.22,"total_km":596,"mileage":20.84,"amount":1808.09,"place":""},{"id":"b19","date":"2017-03-08","km":9494,"fuel":24.43,"price":63.04,"total_km":534,"mileage":21.86,"amount":1540.07,"place":""},{"id":"b20","date":"2017-03-17","km":10079,"fuel":28.68,"price":63.04,"total_km":585,"mileage":20.4,"amount":1807.99,"place":""},{"id":"b21","date":"2017-03-29","km":10637,"fuel":26.79,"price":63.14,"total_km":558,"mileage":20.83,"amount":1691.52,"place":""},{"id":"b22","date":"2017-04-09","km":11106,"fuel":22.2,"price":59.5,"total_km":469,"mileage":21.13,"amount":1320.9,"place":""},{"id":"b23","date":"2017-04-19","km":11650,"fuel":27.31,"price":60.81,"total_km":544,"mileage":19.92,"amount":1660.72,"place":""},{"id":"b24","date":"2017-04-29","km":12166,"fuel":25.5,"price":60.93,"total_km":516,"mileage":20.24,"amount":1553.71,"place":""},{"id":"b25","date":"2017-05-11","km":12745,"fuel":28.16,"price":61.36,"total_km":579,"mileage":20.56,"amount":1727.9,"place":""},{"id":"b26","date":"2017-05-23","km":13329,"fuel":29.28,"price":58.73,"total_km":584,"mileage":19.95,"amount":1719.61,"place":""},{"id":"b27","date":"2017-05-29","km":13734,"fuel":19.92,"price":58.73,"total_km":405,"mileage":20.33,"amount":1169.9,"place":""},{"id":"b28","date":"2017-06-03","km":14137,"fuel":17.05,"price":60,"total_km":403,"mileage":23.64,"amount":1023.0,"place":""},{"id":"b29","date":"2017-06-04","km":14578,"fuel":19.94,"price":59.53,"total_km":441,"mileage":22.12,"amount":1187.03,"place":""},{"id":"b30","date":"2017-06-05","km":14979,"fuel":17.05,"price":60,"total_km":401,"mileage":23.52,"amount":1023.0,"place":""},{"id":"b31","date":"2017-06-16","km":15501,"fuel":24.19,"price":58.18,"total_km":522,"mileage":21.58,"amount":1407.37,"place":""},{"id":"b32","date":"2017-06-26","km":16047,"fuel":26.33,"price":57.18,"total_km":546,"mileage":20.74,"amount":1505.55,"place":""},{"id":"b33","date":"2017-07-07","km":16675,"fuel":29.36,"price":54.78,"total_km":628,"mileage":21.39,"amount":1608.34,"place":""},{"id":"b34","date":"2017-07-10","km":17235,"fuel":24.98,"price":57.48,"total_km":560,"mileage":22.42,"amount":1435.85,"place":""},{"id":"b35","date":"2017-07-16","km":17854,"fuel":27.73,"price":55.13,"total_km":619,"mileage":22.32,"amount":1528.75,"place":""},{"id":"b36","date":"2017-07-25","km":18495,"fuel":29.76,"price":55.15,"total_km":641,"mileage":21.54,"amount":1641.26,"place":""},{"id":"b37","date":"2017-08-05","km":19069,"fuel":27.84,"price":55.71,"total_km":574,"mileage":20.62,"amount":1550.97,"place":""},{"id":"b38","date":"2017-08-14","km":19413,"fuel":17.28,"price":57.38,"total_km":344,"mileage":19.91,"amount":991.53,"place":""},{"id":"b39","date":"2017-08-25","km":19986,"fuel":29.44,"price":57.38,"total_km":573,"mileage":19.46,"amount":1689.27,"place":""},{"id":"b40","date":"2017-09-01","km":20300,"fuel":16,"price":57.38,"total_km":314,"mileage":19.62,"amount":918.08,"place":""},{"id":"b41","date":"2017-09-03","km":20911,"fuel":25.8,"price":60.88,"total_km":611,"mileage":23.68,"amount":1570.7,"place":""},{"id":"b42","date":"2017-09-08","km":21562,"fuel":30.78,"price":58.05,"total_km":651,"mileage":21.15,"amount":1786.78,"place":""},{"id":"b43","date":"2017-09-21","km":22097,"fuel":25.98,"price":58.8,"total_km":535,"mileage":20.59,"amount":1527.62,"place":""},{"id":"b44","date":"2017-09-30","km":22630,"fuel":26.6,"price":59.6,"total_km":533,"mileage":20.04,"amount":1585.36,"place":""},{"id":"b45","date":"2017-10-07","km":22962,"fuel":16.42,"price":57.02,"total_km":332,"mileage":20.22,"amount":936.27,"place":""},{"id":"b46","date":"2017-10-18","km":23560,"fuel":29.93,"price":57.19,"total_km":598,"mileage":19.98,"amount":1711.7,"place":""},{"id":"b48","date":"2017-10-21","km":24002,"fuel":18.47,"price":60.42,"total_km":442,"mileage":23.93,"amount":1115.96,"place":""},{"id":"b49","date":"2017-10-24","km":24455,"fuel":19.6,"price":57.84,"total_km":453,"mileage":23.11,"amount":1133.66,"place":""},{"id":"b50","date":"2017-11-01","km":24940,"fuel":23.09,"price":58.43,"total_km":485,"mileage":21.0,"amount":1349.15,"place":""},{"id":"b51","date":"2017-11-06","km":25114,"fuel":8.84,"price":58.98,"total_km":174,"mileage":19.68,"amount":521.38,"place":""},{"id":"b52","date":"2017-11-07","km":25482,"fuel":14.03,"price":61.87,"total_km":368,"mileage":26.23,"amount":868.04,"place":"Erode"},{"id":"b53","date":"2017-11-13","km":26084,"fuel":28.18,"price":59.14,"total_km":602,"mileage":21.36,"amount":1666.57,"place":""},{"id":"b54","date":"2017-11-20","km":26524,"fuel":20.86,"price":59.16,"total_km":440,"mileage":21.09,"amount":1234.08,"place":""},{"id":"b55","date":"2017-11-24","km":26783,"fuel":12.13,"price":59.16,"total_km":259,"mileage":21.35,"amount":717.61,"place":""},{"id":"b56","date":"2017-11-27","km":27481,"fuel":26.28,"price":59.2,"total_km":698,"mileage":26.56,"amount":1555.78,"place":""},{"id":"b57","date":"2017-12-06","km":28055,"fuel":28.13,"price":59.41,"total_km":574,"mileage":20.41,"amount":1671.2,"place":""},{"id":"b58","date":"2017-12-16","km":28579,"fuel":26.14,"price":59.46,"total_km":524,"mileage":20.05,"amount":1554.28,"place":""},{"id":"b59","date":"2017-12-27","km":29118,"fuel":25.9,"price":60.42,"total_km":539,"mileage":20.81,"amount":1564.88,"place":""},{"id":"b60","date":"2018-01-05","km":29643,"fuel":25.28,"price":60.99,"total_km":525,"mileage":20.77,"amount":1541.83,"place":""},{"id":"b61","date":"2018-01-15","km":30153,"fuel":25.15,"price":62.7,"total_km":510,"mileage":20.28,"amount":1576.9,"place":""},{"id":"b62","date":"2018-01-28","km":30734,"fuel":28.35,"price":64.85,"total_km":581,"mileage":20.49,"amount":1838.5,"place":""},{"id":"b63","date":"2018-02-07","km":31201,"fuel":22.92,"price":65.28,"total_km":467,"mileage":20.38,"amount":1496.22,"place":""},{"id":"b64","date":"2018-02-14","km":31566,"fuel":17.87,"price":64.55,"total_km":365,"mileage":20.43,"amount":1153.51,"place":""},{"id":"b65","date":"2018-02-22","km":32050,"fuel":23.05,"price":63.32,"total_km":484,"mileage":21.0,"amount":1459.53,"place":""},{"id":"b66","date":"2018-02-24","km":32422,"fuel":13.47,"price":65.9,"total_km":372,"mileage":27.62,"amount":887.67,"place":"Erode"},{"id":"b67","date":"2018-02-27","km":32988,"fuel":25.44,"price":63.17,"total_km":566,"mileage":22.25,"amount":1607.04,"place":""},{"id":"b68","date":"2018-03-08","km":33529,"fuel":26.26,"price":64.06,"total_km":541,"mileage":20.6,"amount":1682.22,"place":""},{"id":"b69","date":"2018-03-16","km":33953,"fuel":20.72,"price":63.96,"total_km":424,"mileage":20.46,"amount":1325.25,"place":""},{"id":"b70","date":"2018-03-23","km":34376,"fuel":20.37,"price":64.16,"total_km":423,"mileage":20.77,"amount":1306.94,"place":""},{"id":"b71","date":"2018-04-02","km":34945,"fuel":29.18,"price":65.74,"total_km":569,"mileage":19.5,"amount":1918.29,"place":""},{"id":"b72","date":"2018-04-09","km":35483,"fuel":27.41,"price":65.99,"total_km":538,"mileage":19.63,"amount":1808.79,"place":""},{"id":"b73","date":"2018-04-19","km":36025,"fuel":26.68,"price":66.33,"total_km":542,"mileage":20.31,"amount":1769.68,"place":""},{"id":"b74","date":"2018-04-27","km":36488,"fuel":21.72,"price":67,"total_km":463,"mileage":21.32,"amount":1455.24,"place":""},{"id":"b75","date":"2018-05-08","km":36956,"fuel":24.39,"price":67,"total_km":468,"mileage":19.19,"amount":1634.13,"place":""},{"id":"b76","date":"2018-05-21","km":37440,"fuel":24.35,"price":68.94,"total_km":484,"mileage":19.88,"amount":1678.69,"place":""},{"id":"b77","date":"2018-05-31","km":37965,"fuel":25.99,"price":70.43,"total_km":525,"mileage":20.2,"amount":1830.48,"place":""},{"id":"b78","date":"2018-06-08","km":38401,"fuel":22.3,"price":69.83,"total_km":436,"mileage":19.55,"amount":1557.21,"place":""},{"id":"b79","date":"2018-06-18","km":38891,"fuel":23.42,"price":68.95,"total_km":490,"mileage":20.92,"amount":1614.81,"place":""},{"id":"b80","date":"2018-06-24","km":39278,"fuel":20.98,"price":68.6,"total_km":387,"mileage":18.45,"amount":1439.23,"place":""},{"id":"b81","date":"2018-06-28","km":39802,"fuel":22.94,"price":71.61,"total_km":524,"mileage":22.84,"amount":1642.73,"place":"Erode"},{"id":"b82","date":"2018-07-04","km":40383,"fuel":26.58,"price":68.43,"total_km":581,"mileage":21.86,"amount":1818.87,"place":""},{"id":"b83","date":"2018-07-12","km":40919,"fuel":28.88,"price":69.37,"total_km":536,"mileage":18.56,"amount":2003.41,"place":""},{"id":"b84","date":"2018-07-19","km":41359,"fuel":21.67,"price":70.59,"total_km":440,"mileage":20.3,"amount":1529.69,"place":""},{"id":"b85","date":"2018-07-27","km":41815,"fuel":23.28,"price":69.96,"total_km":456,"mileage":19.59,"amount":1628.67,"place":""},{"id":"b86","date":"2018-08-03","km":42269,"fuel":21.77,"price":70.29,"total_km":454,"mileage":20.85,"amount":1530.21,"place":""},{"id":"b87","date":"2018-08-13","km":42714,"fuel":21.48,"price":71.01,"total_km":445,"mileage":20.72,"amount":1525.29,"place":"Reliance"},{"id":"b88","date":"2018-08-17","km":42937,"fuel":11.25,"price":71.16,"total_km":223,"mileage":19.82,"amount":800.55,"place":""},{"id":"b89","date":"2018-08-24","km":43328,"fuel":19.85,"price":71.49,"total_km":391,"mileage":19.7,"amount":1419.08,"place":""},{"id":"b90","date":"2018-09-03","km":43854,"fuel":26.28,"price":73.49,"total_km":526,"mileage":20.02,"amount":1931.32,"place":""},{"id":"b91","date":"2018-09-05","km":44206,"fuel":12.93,"price":76.02,"total_km":352,"mileage":27.22,"amount":982.94,"place":"Salem"},{"id":"b92","date":"2018-09-07","km":44726,"fuel":21.94,"price":74.44,"total_km":520,"mileage":23.7,"amount":1633.21,"place":""},{"id":"b93","date":"2018-09-14","km":45088,"fuel":18.02,"price":75.71,"total_km":362,"mileage":20.09,"amount":1364.29,"place":""},{"id":"b94","date":"2018-09-21","km":45431,"fuel":16.48,"price":74.3,"total_km":343,"mileage":20.81,"amount":1224.46,"place":""},{"id":"b95","date":"2018-09-28","km":45919,"fuel":22.42,"price":74.85,"total_km":488,"mileage":21.77,"amount":1678.14,"place":""},{"id":"b96","date":"2018-10-12","km":46442,"fuel":21.87,"price":75.38,"total_km":523,"mileage":23.91,"amount":1648.56,"place":""},{"id":"b97","date":"2018-10-19","km":46769,"fuel":18.74,"price":75.96,"total_km":327,"mileage":17.45,"amount":1423.49,"place":""},{"id":"b98","date":"2018-10-26","km":47190,"fuel":19.49,"price":75.2,"total_km":421,"mileage":21.6,"amount":1465.65,"place":""},{"id":"b99","date":"2018-11-12","km":47663,"fuel":24.36,"price":72.75,"total_km":473,"mileage":19.42,"amount":1772.19,"place":""},{"id":"b100","date":"2018-11-22","km":48232,"fuel":28,"price":71.41,"total_km":569,"mileage":20.32,"amount":1999.48,"place":""},{"id":"b101","date":"2018-11-25","km":48960,"fuel":27.55,"price":74.61,"total_km":728,"mileage":26.42,"amount":2055.51,"place":"A2B Palayampudur"},{"id":"b102","date":"2018-12-04","km":49553,"fuel":26.78,"price":66.82,"total_km":593,"mileage":22.14,"amount":1789.44,"place":""},{"id":"b103","date":"2018-12-14","km":50076,"fuel":26.07,"price":64.99,"total_km":523,"mileage":20.06,"amount":1694.29,"place":""},{"id":"b104","date":"2018-12-21","km":50497,"fuel":16.01,"price":64.8,"total_km":421,"mileage":26.3,"amount":1037.45,"place":""},{"id":"b105","date":"2018-12-26","km":50726,"fuel":14.34,"price":64.24,"total_km":229,"mileage":15.97,"amount":921.2,"place":""},{"id":"b106","date":"2018-12-31","km":51373,"fuel":25.38,"price":63.26,"total_km":647,"mileage":25.49,"amount":1605.54,"place":""},{"id":"b107","date":"2019-01-06","km":51886,"fuel":22.67,"price":65,"total_km":513,"mileage":22.63,"amount":1473.55,"place":"SHELL"},{"id":"b108","date":"2018-01-10","km":52123,"fuel":11.55,"price":64.53,"total_km":237,"mileage":20.52,"amount":745.32,"place":""},{"id":"b109","date":"2019-01-23","km":52683,"fuel":26.2,"price":68.02,"total_km":560,"mileage":21.37,"amount":1782.12,"place":""},{"id":"b110","date":"2019-02-01","km":53164,"fuel":23.29,"price":67.86,"total_km":481,"mileage":20.65,"amount":1580.46,"place":""},{"id":"b111","date":"2019-02-12","km":53663,"fuel":23.43,"price":67.77,"total_km":499,"mileage":21.3,"amount":1587.85,"place":""},{"id":"b112","date":"2019-02-21","km":54135,"fuel":14.29,"price":68.51,"total_km":472,"mileage":33.03,"amount":979.01,"place":""},{"id":"b113","date":"2019-03-01","km":54534,"fuel":27.09,"price":69.3,"total_km":399,"mileage":14.73,"amount":1877.34,"place":""},{"id":"b114","date":"2019-03-13","km":55101,"fuel":29.19,"price":69.56,"total_km":567,"mileage":19.42,"amount":2030.46,"place":""},{"id":"b115","date":"2018-03-16","km":55637,"fuel":22.24,"price":71.27,"total_km":536,"mileage":24.1,"amount":1585.04,"place":"Erode"},{"id":"b116","date":"2019-03-21","km":56093,"fuel":19.46,"price":68.91,"total_km":456,"mileage":23.43,"amount":1340.99,"place":""},{"id":"b117","date":"2019-03-28","km":56422,"fuel":16.49,"price":68.54,"total_km":329,"mileage":19.95,"amount":1130.22,"place":""},{"id":"b118","date":"2019-04-04","km":56814,"fuel":18.92,"price":68.31,"total_km":392,"mileage":20.72,"amount":1292.43,"place":""},{"id":"b119","date":"2019-04-07","km":57233,"fuel":16.49,"price":70.28,"total_km":419,"mileage":25.41,"amount":1158.92,"place":"Erode"},{"id":"b120","date":"2019-04-09","km":57558,"fuel":13.09,"price":68.3,"total_km":325,"mileage":24.83,"amount":894.05,"place":""},{"id":"b121","date":"2019-04-17","km":57952,"fuel":21.2,"price":68.51,"total_km":394,"mileage":18.58,"amount":1452.41,"place":""},{"id":"b122","date":"2019-04-30","km":58489,"fuel":26.58,"price":68.93,"total_km":537,"mileage":20.2,"amount":1832.16,"place":""},{"id":"b123","date":"2019-05-10","km":58960,"fuel":23.25,"price":68.68,"total_km":471,"mileage":20.26,"amount":1596.81,"place":""},{"id":"b124","date":"2019-05-18","km":59362,"fuel":20.02,"price":68.14,"total_km":402,"mileage":20.08,"amount":1364.16,"place":""},{"id":"b125","date":"2019-05-27","km":59737,"fuel":20.53,"price":68.86,"total_km":375,"mileage":18.27,"amount":1413.7,"place":""},{"id":"b126","date":"2019-06-06","km":60203,"fuel":24.52,"price":67.45,"total_km":466,"mileage":19.0,"amount":1653.87,"place":""},{"id":"b127","date":"2019-06-13","km":60698,"fuel":24.57,"price":66.47,"total_km":495,"mileage":20.15,"amount":1633.17,"place":""},{"id":"b128","date":"2019-06-15","km":61087,"fuel":16.76,"price":68.09,"total_km":389,"mileage":23.21,"amount":1141.19,"place":"Erode"},{"id":"b129","date":"2019-06-18","km":61666,"fuel":28.11,"price":66.06,"total_km":579,"mileage":20.6,"amount":1856.95,"place":""},{"id":"b130","date":"2019-06-27","km":62083,"fuel":22.53,"price":66.19,"total_km":417,"mileage":18.51,"amount":1491.26,"place":""},{"id":"b131","date":"2019-07-05","km":62528,"fuel":22.34,"price":66.48,"total_km":445,"mileage":19.92,"amount":1485.16,"place":""},{"id":"b132","date":"2019-07-07","km":63072,"fuel":22.24,"price":71.63,"total_km":544,"mileage":24.46,"amount":1593.05,"place":"Dharmapuri(BP Thoppur)"},{"id":"b133","date":"2019-07-15","km":63527,"fuel":20.16,"price":68.48,"total_km":455,"mileage":22.57,"amount":1380.56,"place":""},{"id":"b134","date":"2019-07-17","km":64031,"fuel":20.87,"price":68.49,"total_km":504,"mileage":24.15,"amount":1429.39,"place":""},{"id":"b135","date":"2019-07-29","km":64573,"fuel":27.26,"price":68.35,"total_km":542,"mileage":19.88,"amount":1863.22,"place":""},{"id":"b136","date":"2019-08-06","km":64968,"fuel":18.68,"price":68.27,"total_km":395,"mileage":21.15,"amount":1275.28,"place":""},{"id":"b137","date":"2019-08-16","km":65462,"fuel":25.06,"price":67.71,"total_km":494,"mileage":19.71,"amount":1696.81,"place":""},{"id":"b138","date":"2019-08-23","km":65866,"fuel":20.69,"price":67.27,"total_km":404,"mileage":19.53,"amount":1391.82,"place":""},{"id":"b139","date":"2019-09-04","km":66316,"fuel":22.54,"price":67.52,"total_km":450,"mileage":19.96,"amount":1521.9,"place":""},{"id":"b140","date":"2019-09-12","km":66612,"fuel":15.36,"price":67.42,"total_km":296,"mileage":19.27,"amount":1035.57,"place":""},{"id":"b141","date":"2019-09-16","km":67259,"fuel":25.27,"price":67.63,"total_km":647,"mileage":25.6,"amount":1709.01,"place":""},{"id":"b142","date":"2019-09-25","km":67727,"fuel":22.78,"price":69.4,"total_km":468,"mileage":20.54,"amount":1580.93,"place":""},{"id":"b143","date":"2019-10-04","km":68134,"fuel":20.46,"price":69.65,"total_km":407,"mileage":19.89,"amount":1425.04,"place":""},{"id":"b144","date":"2019-10-11","km":68458,"fuel":17.33,"price":68.87,"total_km":324,"mileage":18.7,"amount":1193.52,"place":""},{"id":"b145","date":"2019-10-17","km":68833,"fuel":19.85,"price":68.72,"total_km":375,"mileage":18.89,"amount":1364.09,"place":""},{"id":"b146","date":"2019-10-25","km":69234,"fuel":19.95,"price":68.3,"total_km":401,"mileage":20.1,"amount":1362.58,"place":""},{"id":"b147","date":"2019-11-07","km":69744,"fuel":25.4,"price":68.01,"total_km":510,"mileage":20.08,"amount":1727.45,"place":""},{"id":"b148","date":"2019-11-15","km":70160,"fuel":21.59,"price":68.06,"total_km":416,"mileage":19.27,"amount":1469.42,"place":""},{"id":"b149","date":"2019-11-27","km":70642,"fuel":24.19,"price":68,"total_km":482,"mileage":19.93,"amount":1644.92,"place":""},{"id":"b150","date":"2019-12-05","km":71070,"fuel":21.42,"price":68.05,"total_km":428,"mileage":19.98,"amount":1457.63,"place":""},{"id":"b151","date":"2019-12-12","km":71424,"fuel":18.03,"price":68.25,"total_km":354,"mileage":19.63,"amount":1230.55,"place":""},{"id":"b152","date":"2019-12-19","km":71857,"fuel":21.36,"price":68.44,"total_km":433,"mileage":20.27,"amount":1461.88,"place":""},{"id":"b153","date":"2019-12-22","km":72358,"fuel":19.06,"price":70.5,"total_km":501,"mileage":26.29,"amount":1343.73,"place":"Chennai"},{"id":"b154","date":"2019-12-27","km":72847,"fuel":24.19,"price":68,"total_km":489,"mileage":20.21,"amount":1644.92,"place":""},{"id":"b155","date":"2019-12-28","km":73248,"fuel":15.93,"price":72.02,"total_km":401,"mileage":25.17,"amount":1147.28,"place":"Erode"},{"id":"b156","date":"2020-01-02","km":73727,"fuel":22.39,"price":70.39,"total_km":479,"mileage":21.39,"amount":1576.03,"place":""},{"id":"b157","date":"2020-01-07","km":74078,"fuel":14.25,"price":74.49,"total_km":351,"mileage":24.63,"amount":1061.48,"place":"Shoolagiri"},{"id":"b158","date":"2020-01-09","km":74711,"fuel":26.27,"price":71.28,"total_km":633,"mileage":24.1,"amount":1872.53,"place":""},{"id":"b159","date":"2020-01-20","km":75138,"fuel":21.43,"price":70.57,"total_km":427,"mileage":19.93,"amount":1512.32,"place":""},{"id":"b160","date":"2020-01-28","km":75572,"fuel":22.37,"price":68.83,"total_km":434,"mileage":19.4,"amount":1539.73,"place":""},{"id":"b161","date":"2020-02-07","km":76054,"fuel":24.18,"price":67.91,"total_km":482,"mileage":19.93,"amount":1642.06,"place":""},{"id":"b162","date":"2020-02-11","km":76460,"fuel":19.69,"price":67.09,"total_km":406,"mileage":20.62,"amount":1321.0,"place":""},{"id":"b163","date":"2020-02-21","km":77000,"fuel":27.07,"price":66.87,"total_km":540,"mileage":19.95,"amount":1810.17,"place":""},{"id":"b164","date":"2020-03-04","km":77431,"fuel":22.12,"price":66.2,"total_km":431,"mileage":19.48,"amount":1464.34,"place":""},{"id":"b165","date":"2020-03-19","km":77893,"fuel":22.68,"price":64.4,"total_km":462,"mileage":20.37,"amount":1460.59,"place":""},{"id":"b166","date":"2020-08-15","km":78166,"fuel":16.29,"price":77.94,"total_km":273,"mileage":16.76,"amount":1269.64,"place":""},{"id":"b167","date":"2020-11-27","km":78642,"fuel":24.2,"price":76.51,"total_km":476,"mileage":19.67,"amount":1851.54,"place":""},{"id":"b168","date":"2021-02-21","km":79101,"fuel":24.25,"price":85.83,"total_km":459,"mileage":18.93,"amount":2081.38,"place":""},{"id":"b169","date":"2021-03-02","km":79753,"fuel":27.88,"price":86.36,"total_km":652,"mileage":23.39,"amount":2407.72,"place":""},{"id":"b170","date":"2021-08-07","km":80179,"fuel":24.85,"price":95.33,"total_km":426,"mileage":17.14,"amount":2368.95,"place":""},{"id":"b171","date":"2021-10-15","km":80732,"fuel":19.63,"price":98.66,"total_km":553,"mileage":28.17,"amount":1936.7,"place":"Erode"},{"id":"b172","date":"2021-10-24","km":81117,"fuel":23.08,"price":101.64,"total_km":385,"mileage":16.68,"amount":2345.85,"place":"Dharmapuri(BP Thoppur)"},{"id":"b173","date":"2021-11-02","km":81499,"fuel":16.18,"price":103.62,"total_km":382,"mileage":23.61,"amount":1676.57,"place":"Dharmapuri(BP Thoppur)"},{"id":"b174","date":"2021-11-07","km":81884,"fuel":17.23,"price":92.45,"total_km":385,"mileage":22.34,"amount":1592.91,"place":"Dharmapuri(BP Thoppur)"},{"id":"b175","date":"2021-12-03","km":82251,"fuel":18.25,"price":85.04,"total_km":367,"mileage":20.11,"amount":1551.98,"place":""},{"id":"b176","date":"2021-12-25","km":82532,"fuel":12.96,"price":92.45,"total_km":281,"mileage":21.68,"amount":1198.15,"place":"Dharmapuri(BP Thoppur)"},{"id":"b177","date":"2021-12-31","km":82916,"fuel":17.99,"price":92.45,"total_km":384,"mileage":21.35,"amount":1663.18,"place":"Dharmapuri(BP Thoppur)"},{"id":"b178","date":"2022-02-28","km":83317,"fuel":19.32,"price":85.04,"total_km":401,"mileage":20.76,"amount":1642.97,"place":""},{"id":"b179","date":"2022-03-24","km":83578,"fuel":14.33,"price":86.6,"total_km":261,"mileage":18.21,"amount":1240.98,"place":""},{"id":"b180","date":"2022-04-02","km":83945,"fuel":15.02,"price":98.72,"total_km":367,"mileage":24.43,"amount":1482.77,"place":"Erode"},{"id":"b181","date":"2022-04-13","km":84142,"fuel":10.76,"price":101.38,"total_km":197,"mileage":18.31,"amount":1090.85,"place":"Erode"},{"id":"b182","date":"2022-04-19","km":84555,"fuel":19.9,"price":94.79,"total_km":413,"mileage":20.75,"amount":1886.32,"place":""},{"id":"b183","date":"2022-05-05","km":84851,"fuel":15.32,"price":94.81,"total_km":296,"mileage":19.32,"amount":1452.49,"place":""},{"id":"b184","date":"2022-05-05","km":85161,"fuel":11.61,"price":101.38,"total_km":310,"mileage":26.7,"amount":1177.02,"place":"Erode"},{"id":"b185","date":"2022-05-13","km":85588,"fuel":20.33,"price":94.81,"total_km":427,"mileage":21.0,"amount":1927.49,"place":""},{"id":"b186","date":"2022-05-22","km":85750,"fuel":8.54,"price":87.91,"total_km":162,"mileage":18.97,"amount":750.75,"place":""},{"id":"b187","date":"2022-05-22","km":86054,"fuel":11.04,"price":94.68,"total_km":304,"mileage":27.54,"amount":1045.27,"place":"Erode"},{"id":"b188","date":"2022-05-27","km":86541,"fuel":22.12,"price":90.42,"total_km":487,"mileage":22.02,"amount":2000.09,"place":"Nayara"},{"id":"b189","date":"2022-06-21","km":86848,"fuel":18.63,"price":87.9,"total_km":307,"mileage":16.48,"amount":1637.58,"place":""},{"id":"b190","date":"2022-07-05","km":87165,"fuel":16.79,"price":87.91,"total_km":317,"mileage":18.88,"amount":1476.01,"place":""},{"id":"b191","date":"2022-07-08","km":87548,"fuel":14.61,"price":94.68,"total_km":383,"mileage":26.21,"amount":1383.27,"place":"Erode"},{"id":"b192","date":"2022-07-11","km":87948,"fuel":17.41,"price":87.91,"total_km":400,"mileage":22.98,"amount":1530.51,"place":""},{"id":"b193","date":"2022-07-25","km":88250,"fuel":17.11,"price":87.91,"total_km":302,"mileage":17.65,"amount":1504.14,"place":""},{"id":"b194","date":"2022-08-11","km":88496,"fuel":15,"price":87.91,"total_km":246,"mileage":16.4,"amount":1318.65,"place":""},{"id":"b195","date":"2022-08-12","km":88802,"fuel":11.35,"price":94.78,"total_km":306,"mileage":26.96,"amount":1075.75,"place":"Erode"},{"id":"b196","date":"2022-08-16","km":89182,"fuel":16.67,"price":87.91,"total_km":380,"mileage":22.8,"amount":1465.46,"place":""},{"id":"b197","date":"2022-09-15","km":89418,"fuel":16.13,"price":87.91,"total_km":236,"mileage":14.63,"amount":1417.99,"place":""},{"id":"b198","date":"2022-09-27","km":89700,"fuel":18.74,"price":87.91,"total_km":282,"mileage":15.05,"amount":1647.43,"place":""},{"id":"b199","date":"2022-10-12","km":89990,"fuel":17.84,"price":87.91,"total_km":290,"mileage":16.26,"amount":1568.31,"place":"Nayara"},{"id":"b200","date":"2022-10-31","km":90257,"fuel":17,"price":87.91,"total_km":267,"mileage":15.71,"amount":1494.47,"place":"Nayara"},{"id":"b201","date":"2022-11-06","km":90694,"fuel":15.83,"price":94.74,"total_km":437,"mileage":27.61,"amount":1499.73,"place":"Nayara"},{"id":"b202","date":"2022-11-08","km":91094,"fuel":18.77,"price":87.91,"total_km":400,"mileage":21.31,"amount":1650.07,"place":"Nayara"},{"id":"b203","date":"2022-11-18","km":91321,"fuel":13.44,"price":87.91,"total_km":227,"mileage":16.89,"amount":1181.51,"place":"Nayara"},{"id":"b204","date":"2022-11-21","km":92013,"fuel":17.07,"price":87.89,"total_km":692,"mileage":40.54,"amount":1500.28,"place":""},{"id":"b205","date":"2022-11-28","km":92200,"fuel":20.63,"price":87.91,"total_km":187,"mileage":9.06,"amount":1813.58,"place":""},{"id":"b206","date":"2022-12-10","km":92454,"fuel":14.57,"price":87.91,"total_km":254,"mileage":17.43,"amount":1280.85,"place":"Nayara"},{"id":"b207","date":"2022-12-30","km":92755,"fuel":16.46,"price":87.88,"total_km":301,"mileage":18.29,"amount":1446.5,"place":""},{"id":"b208","date":"2023-01-31","km":93159,"fuel":23.11,"price":87.91,"total_km":404,"mileage":17.48,"amount":2031.6,"place":""},{"id":"b209","date":"2023-02-02","km":93801,"fuel":24.92,"price":87.91,"total_km":642,"mileage":25.76,"amount":2190.72,"place":"Nayara"},{"id":"b210","date":"2023-03-01","km":94136,"fuel":18.83,"price":87.88,"total_km":335,"mileage":17.79,"amount":1654.78,"place":""},{"id":"b211","date":"2023-03-27","km":94482,"fuel":19.65,"price":87.88,"total_km":346,"mileage":17.61,"amount":1726.84,"place":""},{"id":"b212","date":"2023-04-17","km":94707,"fuel":13.01,"price":87.88,"total_km":225,"mileage":17.29,"amount":1143.32,"place":""},{"id":"b213","date":"2023-05-02","km":95077,"fuel":14.09,"price":94.78,"total_km":370,"mileage":26.26,"amount":1335.45,"place":"Erode"},{"id":"b214","date":"2023-05-22","km":95668,"fuel":17.07,"price":87.88,"total_km":591,"mileage":34.62,"amount":1500.11,"place":""},{"id":"b215","date":"2023-05-29","km":95870,"fuel":20.4,"price":87.88,"total_km":202,"mileage":9.9,"amount":1792.75,"place":""},{"id":"b216","date":"2023-06-10","km":95998,"fuel":7.34,"price":87.88,"total_km":128,"mileage":17.44,"amount":645.04,"place":""},{"id":"b217","date":"2023-06-11","km":96328,"fuel":12.78,"price":94.76,"total_km":330,"mileage":25.82,"amount":1211.03,"place":"Erode"},{"id":"b218","date":"2023-06-19","km":96755,"fuel":20.24,"price":87.88,"total_km":427,"mileage":21.1,"amount":1778.69,"place":""},{"id":"b219","date":"2023-07-08","km":97049,"fuel":16.59,"price":87.88,"total_km":294,"mileage":17.72,"amount":1457.93,"place":"Nayara"},{"id":"b220","date":"2023-07-10","km":97375,"fuel":12.27,"price":94.75,"total_km":326,"mileage":26.57,"amount":1162.58,"place":"Nayara Erode"},{"id":"b221","date":"2023-07-18","km":97861,"fuel":22.34,"price":87.88,"total_km":486,"mileage":21.75,"amount":1963.24,"place":""},{"id":"b222","date":"2023-08-21","km":98222,"fuel":19.49,"price":87.88,"total_km":361,"mileage":18.52,"amount":1712.78,"place":""},{"id":"b223","date":"2023-08-26","km":98612,"fuel":17.41,"price":94.78,"total_km":390,"mileage":22.4,"amount":1650.12,"place":"Erode"},{"id":"b224","date":"2023-08-30","km":99020,"fuel":18.68,"price":87.88,"total_km":408,"mileage":21.84,"amount":1641.6,"place":""},{"id":"b225","date":"2023-09-21","km":99334,"fuel":16.8,"price":87.88,"total_km":314,"mileage":18.69,"amount":1476.38,"place":""},{"id":"b226","date":"2023-10-12","km":99596,"fuel":15.89,"price":87.88,"total_km":262,"mileage":16.49,"amount":1396.41,"place":""},{"id":"b227","date":"2023-10-14","km":99940,"fuel":14,"price":94.78,"total_km":344,"mileage":24.57,"amount":1326.92,"place":"Erode"},{"id":"b228","date":"2023-10-20","km":100184,"fuel":10.12,"price":94.78,"total_km":244,"mileage":24.11,"amount":959.17,"place":"Erode"},{"id":"b229","date":"2023-10-25","km":100571,"fuel":17.79,"price":87.88,"total_km":387,"mileage":21.75,"amount":1563.39,"place":""},{"id":"b230","date":"2023-10-29","km":101251,"fuel":27.35,"price":87.88,"total_km":680,"mileage":24.86,"amount":2403.52,"place":""},{"id":"b231","date":"2023-11-20","km":101467,"fuel":12.37,"price":87.88,"total_km":216,"mileage":17.46,"amount":1087.08,"place":"Nayara"},{"id":"b232","date":"2023-11-22","km":101775,"fuel":11.24,"price":94.78,"total_km":308,"mileage":27.4,"amount":1065.33,"place":"Erode"},{"id":"b233","date":"2023-11-28","km":102427,"fuel":28.09,"price":87.88,"total_km":652,"mileage":23.21,"amount":2468.55,"place":""},{"id":"b234","date":"2023-12-19","km":102790,"fuel":19.93,"price":87.88,"total_km":363,"mileage":18.21,"amount":1751.45,"place":""},{"id":"b235","date":"2023-12-24","km":103145,"fuel":15,"price":94.78,"total_km":355,"mileage":23.67,"amount":1421.7,"place":"Erode"},{"id":"b236","date":"2024-01-02","km":103627,"fuel":22.55,"price":87.88,"total_km":482,"mileage":21.37,"amount":1981.69,"place":""},{"id":"b237","date":"2024-01-14","km":103830,"fuel":9.91,"price":87.91,"total_km":203,"mileage":20.48,"amount":871.19,"place":""},{"id":"b238","date":"2024-01-16","km":104477,"fuel":27.21,"price":87.88,"total_km":647,"mileage":23.78,"amount":2391.21,"place":""},{"id":"b239","date":"2024-01-25","km":104592,"fuel":6.73,"price":87.88,"total_km":115,"mileage":17.09,"amount":591.43,"place":""},{"id":"b240","date":"2024-01-27","km":104930,"fuel":14.12,"price":94.84,"total_km":338,"mileage":23.94,"amount":1339.14,"place":"Erode"},{"id":"b241","date":"2024-01-30","km":105288,"fuel":16.07,"price":87.88,"total_km":358,"mileage":22.28,"amount":1412.23,"place":""},{"id":"b242","date":"2024-02-15","km":105549,"fuel":13.97,"price":87.88,"total_km":261,"mileage":18.68,"amount":1227.68,"place":""},{"id":"b243","date":"2024-02-20","km":106212,"fuel":26.69,"price":87.88,"total_km":663,"mileage":24.84,"amount":2345.52,"place":""},{"id":"b244","date":"2024-03-18","km":106569,"fuel":19.52,"price":85.93,"total_km":357,"mileage":18.29,"amount":1677.35,"place":""},{"id":"b245","date":"2024-03-28","km":106751,"fuel":10.4,"price":85.93,"total_km":182,"mileage":17.5,"amount":893.67,"place":""},{"id":"b246","date":"2024-03-31","km":107093,"fuel":14.22,"price":92.86,"total_km":342,"mileage":24.05,"amount":1320.47,"place":"Erode"},{"id":"b247","date":"2024-04-22","km":107409,"fuel":15.33,"price":92.94,"total_km":316,"mileage":20.61,"amount":1424.77,"place":"Erode"},{"id":"b248","date":"2024-05-10","km":107761,"fuel":17.57,"price":92.99,"total_km":352,"mileage":20.03,"amount":1633.83,"place":"Modakurichi"},{"id":"b249","date":"2024-06-08","km":108154,"fuel":18.56,"price":92.88,"total_km":393,"mileage":21.17,"amount":1723.85,"place":"Erode"},{"id":"b250","date":"2024-06-29","km":108497,"fuel":17.77,"price":92.99,"total_km":343,"mileage":19.3,"amount":1652.43,"place":"Modakurichi"},{"id":"b251","date":"2024-07-01","km":108931,"fuel":16.26,"price":88.96,"total_km":434,"mileage":26.69,"amount":1446.49,"place":""},{"id":"b252","date":"2024-07-24","km":109448,"fuel":20.13,"price":92.88,"total_km":517,"mileage":25.68,"amount":1869.67,"place":"Erode"},{"id":"b253","date":"2024-08-21","km":109871,"fuel":20.63,"price":92.88,"total_km":423,"mileage":20.5,"amount":1916.11,"place":"Erode"},{"id":"b254","date":"2024-09-15","km":110330,"fuel":22.25,"price":92.88,"total_km":459,"mileage":20.63,"amount":2066.58,"place":"Erode"},{"id":"b255","date":"2024-09-30","km":110860,"fuel":24.34,"price":88.94,"total_km":530,"mileage":21.77,"amount":2164.8,"place":""},{"id":"b256","date":"2024-10-09","km":111255,"fuel":16.77,"price":92.88,"total_km":395,"mileage":23.55,"amount":1557.6,"place":"Erode"},{"id":"b257","date":"2024-10-24","km":111676,"fuel":19.93,"price":88.94,"total_km":421,"mileage":21.12,"amount":1772.57,"place":""},{"id":"b258","date":"2024-11-06","km":112130,"fuel":18.94,"price":93.04,"total_km":454,"mileage":23.97,"amount":1762.18,"place":"Modakurichi"},{"id":"b259","date":"2024-11-25","km":112670,"fuel":24.64,"price":88.98,"total_km":540,"mileage":21.92,"amount":2192.47,"place":""},{"id":"b260","date":"2024-12-14","km":112993,"fuel":18.8,"price":89.43,"total_km":323,"mileage":17.18,"amount":1681.28,"place":"Shell"},{"id":"b261","date":"2024-12-22","km":113419,"fuel":18.47,"price":92,"total_km":426,"mileage":23.06,"amount":1699.24,"place":"Nayara Modakurichi"},{"id":"b262","date":"2025-01-02","km":113849,"fuel":19.46,"price":89.43,"total_km":430,"mileage":22.1,"amount":1740.31,"place":"Shell"},{"id":"b263","date":"2025-01-30","km":114277,"fuel":22.37,"price":89.48,"total_km":428,"mileage":19.13,"amount":2001.67,"place":"Shell"},{"id":"b264","date":"2025-02-01","km":114698,"fuel":16.15,"price":93.04,"total_km":421,"mileage":26.07,"amount":1502.6,"place":"Modakurichi"},{"id":"b265","date":"2025-02-09","km":114915,"fuel":10.63,"price":93.04,"total_km":217,"mileage":20.41,"amount":989.02,"place":"Modakurichi"},{"id":"b266","date":"2025-02-17","km":115409,"fuel":20.69,"price":89.48,"total_km":494,"mileage":23.88,"amount":1851.34,"place":"Shell"},{"id":"b267","date":"2025-03-07","km":115641,"fuel":13.3,"price":89.48,"total_km":232,"mileage":17.44,"amount":1190.08,"place":"Shell"},{"id":"b268","date":"2025-03-09","km":116016,"fuel":14.53,"price":93.04,"total_km":375,"mileage":25.81,"amount":1351.87,"place":"Modakurichi"},{"id":"b269","date":"2025-03-18","km":116585,"fuel":24.84,"price":89.48,"total_km":569,"mileage":22.91,"amount":2222.68,"place":"Shell"},{"id":"b270","date":"2025-04-05","km":116831,"fuel":13.39,"price":91.49,"total_km":246,"mileage":18.37,"amount":1225.05,"place":"Shell"},{"id":"b271","date":"2025-04-10","km":117291,"fuel":17.39,"price":93.03,"total_km":460,"mileage":26.45,"amount":1617.79,"place":"Nayara Modakurichi"},{"id":"b272","date":"2025-04-27","km":117864,"fuel":27.8,"price":91.49,"total_km":573,"mileage":20.61,"amount":2543.42,"place":"Shell"},{"id":"b273","date":"2025-05-02","km":118232,"fuel":15.49,"price":92.93,"total_km":368,"mileage":23.76,"amount":1439.49,"place":"Modakurichi"},{"id":"b274","date":"2025-05-11","km":118593,"fuel":14.73,"price":92.03,"total_km":361,"mileage":24.51,"amount":1355.6,"place":"Nayara Modakurichi"},{"id":"b275","date":"2025-05-18","km":119121,"fuel":21.87,"price":94.35,"total_km":528,"mileage":24.14,"amount":2063.43,"place":"Krishna Inn"},{"id":"b276","date":"2025-05-20","km":119728,"fuel":25.48,"price":91.49,"total_km":607,"mileage":23.82,"amount":2331.17,"place":"Shell"},{"id":"b277","date":"2025-05-27","km":119894,"fuel":9.6,"price":90.99,"total_km":166,"mileage":17.29,"amount":873.5,"place":""},{"id":"b278","date":"2025-06-02","km":120291,"fuel":17.16,"price":93.04,"total_km":397,"mileage":23.14,"amount":1596.57,"place":"Modakurichi"},{"id":"b279","date":"2025-06-08","km":120835,"fuel":24.22,"price":92.93971,"total_km":544,"mileage":22.46,"amount":2251.0,"place":"Erode"},{"id":"b280","date":"2025-06-13","km":121235,"fuel":19.04,"price":92.92,"total_km":400,"mileage":21.01,"amount":1769.2,"place":"HP Chinniampalayam"},{"id":"b281","date":"2025-06-16","km":121844,"fuel":25.58,"price":91.49,"total_km":609,"mileage":23.81,"amount":2340.31,"place":""},{"id":"b282","date":"2025-07-16","km":122323,"fuel":27.49,"price":90.99,"total_km":479,"mileage":17.42,"amount":2501.32,"place":""},{"id":"b283","date":"2025-08-09","km":122732,"fuel":23.6,"price":90.99,"total_km":409,"mileage":17.33,"amount":2147.36,"place":""},{"id":"b284","date":"2025-08-17","km":123258,"fuel":21.5,"price":92.99,"total_km":526,"mileage":24.47,"amount":1999.28,"place":"Erode"},{"id":"b285","date":"2025-08-25","km":123938,"fuel":28.35,"price":90.99,"total_km":680,"mileage":23.99,"amount":2579.57,"place":""},{"id":"b286","date":"2025-09-01","km":124590,"fuel":26.85,"price":92.46,"total_km":652,"mileage":24.28,"amount":2482.55,"place":"Chennai"},{"id":"b287","date":"2025-09-10","km":125258,"fuel":28.59,"price":90.99,"total_km":668,"mileage":23.36,"amount":2601.4,"place":""},{"id":"b288","date":"2025-09-14","km":125776,"fuel":20.29,"price":92.51,"total_km":518,"mileage":25.53,"amount":1877.03,"place":""},{"id":"b289","date":"2025-10-18","km":126391,"fuel":29.49,"price":91.49,"total_km":615,"mileage":20.85,"amount":2698.04,"place":"Shell"}]},"service":{"baleno":[{"id":"s1","date":"2016-10-16","km":1002,"amount":495,"remarks":"1 FreeService"},{"id":"s2","date":"2016-12-22","km":4910,"amount":380,"remarks":"2 FreeService"},{"id":"s3","date":"2017-03-19","km":10155,"amount":2836,"remarks":"3 FreeService"},{"id":"s4","date":"2017-04-01","km":10766,"amount":450,"remarks":"wheel alignment"},{"id":"s5","date":"2017-08-19","km":19707,"amount":9840,"remarks":"Paid service"},{"id":"s6","date":"2017-08-26","km":20020,"amount":1424,"remarks":"Wheel rotation, balancing, alignment"},{"id":"s7","date":"2017-09-04","km":21000,"amount":500,"remarks":"Full Body Wash; @Erode, Ero Wash"},{"id":"s8","date":"2018-01-13","km":30108,"amount":500,"remarks":"Full Body wash @ Express Car wash RR Nagar"},{"id":"s9","date":"2018-01-14","km":30144,"amount":6273,"remarks":"Paid service"},{"id":"s10","date":"2018-02-10","km":31394,"amount":300,"remarks":"wheel alignment"},{"id":"s11","date":"2018-03-17","km":34023,"amount":118,"remarks":"Nitrogen filling. Free checkup & washing @ Nexa mysore road"},{"id":"s12","date":"2018-06-23","km":39254,"amount":9871,"remarks":"Paid service"},{"id":"s13","date":"2018-07-28","km":20020,"amount":1543,"remarks":"Wheel rotation, balancing, alignment"},{"id":"s14","date":"2018-09-14","km":45080,"amount":100,"remarks":"Puncher - Front Right Wheel"},{"id":"s15","date":"2018-11-18","km":48022,"amount":500,"remarks":"Full Body wash @ Express Car wash RR Nagar"},{"id":"s16","date":"2018-12-08","km":49794,"amount":7107,"remarks":"Paid service @ NEXA Mysore road (2100 points redeemed Rs. 1575"},{"id":"s17","date":"2019-03-05","km":54713,"amount":679,"remarks":"Full Body Wash & took Emission Certificate"},{"id":"s18","date":"2019-05-25","km":59719,"amount":50967,"remarks":"All 4 tyres changed (1 tyre was having multiple leaks, another one had earlier fixed for puncher. Other 2 was fine but changed all 4 tyres) Barke pad set and Front suspension arm changed. One Tyre price Rs. 8411"},{"id":"s19","date":"2019-06-25","km":62001,"amount":5017,"remarks":"Accident - LAMP Unit, RR Comb RH"},{"id":"s20","date":"2019-11-02","km":69531,"amount":9272,"remarks":""},{"id":"s21","date":"2020-07-31","km":78000,"amount":650,"remarks":"Jump Start - From NEXA Kalyani Reference"},{"id":"s22","date":"2020-08-12","km":78156,"amount":4700,"remarks":"CAR Battery changed (Rs. 4600 + 100)"},{"id":"s23","date":"2021-07-10","km":79993,"amount":14407,"remarks":""},{"id":"s24","date":"2022-08-08","km":88450,"amount":120,"remarks":"Puncher - Front Right Wheel"},{"id":"s25","date":"2022-08-20","km":89269,"amount":10176.32,"remarks":"Kalyani Motor Assurance - 30,000KM or 2yrs from 20th Aug 2022 to 20th Aug 2024 and KM - 119270. Received the CAR on 30th Aug 2022"},{"id":"s29","date":"2023-01-29","km":93080,"amount":100,"remarks":"Puncher-Back Left Wheel"},{"id":"s30","date":"2023-05-13","km":95164,"amount":3198,"remarks":"Back left wheel bearing changed at Erode NEXA Service"},{"id":"s31","date":"2023-09-05","km":99132,"amount":100,"remarks":"Puncher-Back Right Wheel"},{"id":"s32","date":"2023-09-09","km":99186,"amount":12479,"remarks":"Paid Service @ NEXA RR Nagar Redeemed 1700 points. Wheel rotation, Balancing & Alignment completed."},{"id":"s33","date":"2024-03-27","km":106725,"amount":16350,"remarks":"24th March 2024 I had difficulty in changing gears. Again on 25th faced this. Therefore decided to take to Nexa RR Nagar. Just before Nexa RR Nagar Car stopped and went to Nexa to bring the mechanic. Clutch plate and cylinder changed."},{"id":"s34","date":"2024-09-15","km":110314,"amount":7000,"remarks":"Paid Service @ Erode Nexa Redeemed 1128 points"},{"id":"s35","date":"2025-05-24","km":119818,"amount":55408,"remarks":"Paid Service @ Nexa RR Nagar. 4 Tyres changed."}]}};
+
+function loadData(){
+  try{ const r=localStorage.getItem(STORAGE_KEY); if(r) return JSON.parse(r); }catch(e){}
+  return{cars:[],entries:{},service:{}};
+}
+function saveData(d){ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }
+function getData(){ return loadData(); }
+
+// ── UNITS ─────────────────────────────────────────────────────
+function getUnits(carId){
+  const data = getData();
+  carId = carId || viewCar;
+  const car  = data.cars.find(c=>c.id===carId);
+  if(car?.country==='US') return {
+    currency:'$', currencySymbol:'$', distance:'mi', fuel:'gal',
+    efficiency:'MPG', effLabel:'MPG', distLabel:'Miles', fuelLabel:'Gallons',
+    distFull:'miles driven', fuelFull:'gallons', effFull:'miles per gallon',
+    costPerDist:'Cost/mi', placeholder_km:'e.g. 28450', placeholder_fuel:'e.g. 12.5',
+    placeholder_price:'e.g. 3.89', placeholder_svc_km:'e.g. 28450',
+    effGood:35, effAvg:25,
+    fmt: (n,d=0) => n==null||isNaN(n)?'—':n.toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d}),
+    fmtCur: (n) => n==null||isNaN(n)?'—':'$'+Math.round(n).toLocaleString('en-US')
+  };
+  return {
+    currency:'₹', currencySymbol:'₹', distance:'km', fuel:'L',
+    efficiency:'km/L', effLabel:'Mileage', distLabel:'KM', fuelLabel:'Litres',
+    distFull:'kilometres driven', fuelFull:'litres', effFull:'km per litre',
+    costPerDist:'Cost/km', placeholder_km:'e.g. 45320', placeholder_fuel:'e.g. 28.50',
+    placeholder_price:'e.g. 91.50', placeholder_svc_km:'e.g. 45320',
+    effGood:22, effAvg:16,
+    fmt: (n,d=0) => n==null||isNaN(n)?'—':n.toLocaleString('en-IN',{maximumFractionDigits:d,minimumFractionDigits:d}),
+    fmtCur: (n) => n==null||isNaN(n)?'—':'₹'+Math.round(n).toLocaleString('en-IN')
+  };
+}
+
+function getEffClass(eff, carId){
+  const u = getUnits(carId||viewCar);
+  if(!eff) return '';
+  return eff>=u.effGood?'eff-good':eff>=u.effAvg?'eff-avg':'eff-bad';
+}
+
+// ── THEME ─────────────────────────────────────────────────────
+function setTheme(t){
+  document.body.setAttribute('data-theme',t);
+  localStorage.setItem(THEME_KEY,t);
+  document.querySelectorAll('.theme-swatch').forEach(s=>{
+    s.classList.toggle('active', s.dataset.t===t);
+  });
+  // Redraw charts with new grid color
+  renderDashboard();
+}
+function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY)||'dark';
+  document.body.setAttribute('data-theme',saved);
+  document.querySelectorAll('.theme-swatch').forEach(s=>{
+    s.classList.toggle('active', s.dataset.t===saved);
+  });
+}
+
+// ── STATE ─────────────────────────────────────────────────────
+let viewCar=null, activeCar=null, currentPage=1;
+const PAGE_SIZE=20;
+let editingId=null, deleteId=null, deleteSvcId=null, editingSvcId=null;
+let charts={};
+
+// ── INIT ──────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  initTheme();
+  let data=loadData();
+  if(!data.cars.length){
+    data={cars:SEED_DATA.cars,entries:SEED_DATA.entries,service:SEED_DATA.service||{}};
+    saveData(data);
+    showToast('✅ Baleno data loaded!');
+  }
+  if(!data.cars.some(c=>c.active) && data.cars.length){
+    (data.cars.find(c=>!c.sold)||data.cars[0]).active=true;
+    saveData(data);
+  }
+  activeCar=data.cars.find(c=>c.active)?.id||data.cars[0]?.id||null;
+  viewCar=activeCar;
+  renderAll();
+});
+
+function renderAll(){
+  renderHeader(); renderViewCarSelect(); updateFormLabels();
+  renderDashboard(); renderTable(); renderServiceTable();
+  renderReports(); renderCarsPage();
+  populatePlaceList(); populateYearFilter(); updateEntryCarNote();
+}
+
+// ── HEADER ────────────────────────────────────────────────────
+function renderHeader(){
+  const car=getData().cars.find(c=>c.id===activeCar);
+  document.getElementById('activeCarName').textContent=car?car.name:'None';
+}
+function renderViewCarSelect(){
+  const data=getData(); const sel=document.getElementById('viewCarSelect');
+  if(!data.cars.length){sel.innerHTML='<option>No cars</option>';return;}
+  sel.innerHTML=data.cars.map(c=>`<option value="${c.id}" ${c.id===viewCar?'selected':''}>${c.name}${c.sold?' (Sold)':''} ${c.country==='US'?'🇺🇸':'🇮🇳'}</option>`).join('');
+}
+function switchViewCar(id){
+  viewCar=id; currentPage=1;
+  updateFormLabels(); renderDashboard(); renderTable();
+  renderServiceTable(); renderReports();
+  populatePlaceList(); populateYearFilter(); updateEntryCarNote();
+}
+
+// ── FORM LABELS (unit-aware) ───────────────────────────────────
+function updateFormLabels(){
+  const u=getUnits(viewCar);
+  // Fuel entry form
+  document.getElementById('fKmLabel').textContent=`Odometer (${u.distance})`;
+  document.getElementById('fFuelLabel').textContent=`Fuel (${u.fuel})`;
+  document.getElementById('fPriceLabel').textContent=`Price/${u.fuel} (${u.currencySymbol})`;
+  document.getElementById('fKm').placeholder=u.placeholder_km;
+  document.getElementById('fFuel').placeholder=u.placeholder_fuel;
+  document.getElementById('fPrice').placeholder=u.placeholder_price;
+  document.getElementById('prevDistLabel').textContent=`Distance (${u.distance})`;
+  document.getElementById('prevEffLabel').textContent=u.effLabel;
+  // Entries table header
+  document.getElementById('entriesTableHead').innerHTML=
+    `<th>Date</th><th>${u.distLabel}</th><th>Fuel (${u.fuel})</th><th>${u.currencySymbol}/${u.fuel}</th><th>Distance</th><th>${u.effLabel}</th><th>Amount</th><th>Place</th><th></th>`;
+  // Service form
+  document.getElementById('sKmLabel').textContent=`Odometer (${u.distance})`;
+  document.getElementById('sAmountLabel').textContent=`Amount (${u.currencySymbol})`;
+  document.getElementById('sKm').placeholder=u.placeholder_svc_km;
+  document.getElementById('svcTableHead').innerHTML=
+    `<th>Date</th><th>${u.distLabel}</th><th>Amount</th><th>Remarks</th><th></th>`;
+}
+
+// ── NAV ───────────────────────────────────────────────────────
+function showPage(page,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  btn.classList.add('active');
+  if(page==='dashboard') renderDashboard();
+  if(page==='reports')   renderReports();
+  if(page==='service'){  renderServiceTable(); updateFormLabels(); }
+  if(page==='addEntry')  updateFormLabels();
+}
+
+// ── DATA ACCESSORS ────────────────────────────────────────────
+function getEntries(cid){ cid=cid||viewCar; const d=getData(); if(!cid||!d.entries[cid])return[]; return[...d.entries[cid]].sort((a,b)=>a.date<b.date?-1:1); }
+function getValidEntries(cid){ return getEntries(cid).filter(e=>e.km&&e.km>0); }
+function getServiceEntries(cid){ cid=cid||viewCar; const d=getData(); if(!cid||!d.service[cid])return[]; return[...d.service[cid]].sort((a,b)=>a.date<b.date?-1:1); }
+
+// ── DASHBOARD ─────────────────────────────────────────────────
+function renderDashboard(){
+  const u=getUnits(viewCar);
+  const entries=getValidEntries(), svc=getServiceEntries();
+  const sg=document.getElementById('statsGrid');
+  if(!entries.length){sg.innerHTML=`<div class="empty-state"><div class="emoji">⛽</div>No fuel entries yet. Add your first fill-up!</div>`;return;}
+  const sorted=[...entries].sort((a,b)=>a.km-b.km);
+  const totalDist=sorted[sorted.length-1].km-sorted[0].km;
+  const totalFuel=entries.reduce((s,e)=>s+(e.fuel||0),0);
+  const totalFuelSpend=entries.reduce((s,e)=>s+(e.amount||0),0);
+  const totalSvcSpend=svc.reduce((s,e)=>s+(e.amount||0),0);
+  const effs=entries.filter(e=>e.mileage&&e.mileage>0).map(e=>e.mileage);
+  const avgEff=effs.length?effs.reduce((a,b)=>a+b,0)/effs.length:0;
+  const latestPrice=[...entries].reverse().find(e=>e.price>0)?.price;
+  const costPerUnit=totalDist>0?(totalFuelSpend+totalSvcSpend)/totalDist:null;
+
+  sg.innerHTML=`
+    <div class="stat-card"><div class="stat-label">Total Distance</div><div class="stat-value">${u.fmt(totalDist)}</div><div class="stat-sub">${u.distFull}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Fuel</div><div class="stat-value">${u.fmt(totalFuel,0)} ${u.fuel}</div><div class="stat-sub">${entries.length} fill-ups</div></div>
+    <div class="stat-card"><div class="stat-label">Fuel Spend</div><div class="stat-value" style="font-size:1.25rem">${u.fmtCur(totalFuelSpend)}</div><div class="stat-sub">total on fuel</div></div>
+    <div class="stat-card green"><div class="stat-label">${u.effLabel}</div><div class="stat-value ${getEffClass(avgEff)}">${u.fmt(avgEff,1)}</div><div class="stat-sub">${u.effFull}</div></div>
+    <div class="stat-card blue"><div class="stat-label">Service Spend</div><div class="stat-value" style="font-size:1.25rem;color:var(--purple)">${u.fmtCur(totalSvcSpend)}</div><div class="stat-sub">${svc.length} services</div></div>
+    <div class="stat-card"><div class="stat-label">Total Spend</div><div class="stat-value" style="font-size:1.2rem">${u.fmtCur(totalFuelSpend+totalSvcSpend)}</div><div class="stat-sub">fuel + service</div></div>
+    <div class="stat-card"><div class="stat-label">${u.costPerDist}</div><div class="stat-value" style="font-size:1.25rem">${costPerUnit?u.currencySymbol+costPerUnit.toFixed(2):'—'}</div><div class="stat-sub">running cost</div></div>
+    <div class="stat-card"><div class="stat-label">Latest ${u.currencySymbol}/${u.fuel}</div><div class="stat-value" style="font-size:1.25rem">${latestPrice?u.currencySymbol+latestPrice.toFixed(2):'—'}</div><div class="stat-sub">per ${u.fuel}</div></div>`;
+
+  // Update chart titles
+  document.getElementById('chartSpendTitle').innerHTML=`Monthly Fuel Spend <span>${u.currencySymbol} per month</span>`;
+  document.getElementById('chartMileageTitle').innerHTML=`${u.effLabel} Trend <span>${u.effFull} over time</span>`;
+  document.getElementById('chartPriceTitle').innerHTML=`Fuel Price History <span>${u.currencySymbol}/${u.fuel} over time</span>`;
+
+  renderDashCharts(entries,svc,u);
+  renderRecentService(svc,u);
+}
+
+function renderDashCharts(entries,svc,u){
+  const gridColor=getComputedStyle(document.body).getPropertyValue('--chart-grid').trim()||'rgba(255,255,255,.04)';
+  const co=t=>({responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+(t==='cur'?u.currencySymbol:'')+ctx.raw+(t==='eff'?' '+u.efficiency:t==='price'?' '+u.currencySymbol+'/'+u.fuel:'')}}},
+    scales:{x:{grid:{color:gridColor},ticks:{color:'var(--text3)',font:{size:10},maxTicksLimit:8}},y:{grid:{color:gridColor},ticks:{color:'var(--text3)',font:{size:10}}}}
+  });
+  const monthly={};
+  entries.forEach(e=>{if(!e.date||!e.amount)return;const k=e.date.slice(0,7);monthly[k]=(monthly[k]||0)+e.amount;});
+  const months=Object.keys(monthly).sort().slice(-24);
+  destroyChart('chartSpend');
+  const c1=document.getElementById('chartSpend').getContext('2d');
+  charts['chartSpend']=new Chart(c1,{type:'bar',data:{labels:months.map(m=>{const[y,mo]=m.split('-');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+"'"+y.slice(2);}),datasets:[{data:months.map(m=>Math.round(monthly[m])),backgroundColor:'rgba(var(--accent-rgb,240,165,0),.45)',borderColor:'var(--accent)',borderWidth:1,borderRadius:3}]},options:co('cur')});
+
+  const mE=entries.filter(e=>e.mileage&&e.mileage>0&&e.mileage<200);
+  const step=Math.max(1,Math.floor(mE.length/60));
+  const mS=mE.filter((_,i)=>i%step===0);
+  destroyChart('chartMileage');
+  const c2=document.getElementById('chartMileage').getContext('2d');
+  charts['chartMileage']=new Chart(c2,{type:'line',data:{labels:mS.map(e=>e.date?.slice(0,7)),datasets:[{data:mS.map(e=>+e.mileage.toFixed(1)),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.1)',tension:.3,pointRadius:0,fill:true,borderWidth:1.5}]},options:co('eff')});
+
+  const pE=entries.filter(e=>e.price>0);
+  const pStep=Math.max(1,Math.floor(pE.length/60));
+  const pS=pE.filter((_,i)=>i%pStep===0);
+  destroyChart('chartPrice');
+  const c3=document.getElementById('chartPrice').getContext('2d');
+  charts['chartPrice']=new Chart(c3,{type:'line',data:{labels:pS.map(e=>e.date?.slice(0,7)),datasets:[{data:pS.map(e=>e.price),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',tension:.3,pointRadius:0,fill:true,borderWidth:1.5}]},options:co('price')});
+
+  const svcY={};
+  svc.forEach(e=>{if(!e.date||!e.amount)return;const y=e.date.slice(0,4);svcY[y]=(svcY[y]||0)+e.amount;});
+  const sy=Object.keys(svcY).sort();
+  destroyChart('chartServiceSpend');
+  const c4=document.getElementById('chartServiceSpend').getContext('2d');
+  charts['chartServiceSpend']=new Chart(c4,{type:'bar',data:{labels:sy,datasets:[{data:sy.map(y=>Math.round(svcY[y])),backgroundColor:'rgba(168,85,247,.45)',borderColor:'#a855f7',borderWidth:1,borderRadius:3}]},options:co('cur')});
+}
+
+function renderRecentService(svc,u){
+  const recent=[...svc].reverse().slice(0,5);
+  const div=document.getElementById('recentService');
+  if(!recent.length){div.innerHTML='<div class="empty-state" style="padding:16px">No service records yet</div>';return;}
+  div.innerHTML=recent.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:7px;margin-bottom:5px;border:1px solid var(--border)">
+    <div><div style="font-size:.82rem;font-weight:500">${s.date}</div><div style="font-size:.72rem;color:var(--text2);margin-top:1px">${s.remarks||'Service'}</div></div>
+    <div style="font-family:DM Mono,monospace;font-size:.83rem;color:var(--purple)">${u.fmtCur(s.amount)}</div></div>`).join('');
+}
+
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+// ── ENTRIES TABLE ─────────────────────────────────────────────
+function populateYearFilter(){
+  const entries=getEntries(); const years=[...new Set(entries.map(e=>e.date?.slice(0,4)).filter(Boolean))].sort();
+  const sel=document.getElementById('yearFilter'); const cur=sel.value;
+  sel.innerHTML='<option value="">All Years</option>'+years.map(y=>`<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
+}
+
+function renderTable(){
+  const u=getUnits(viewCar);
+  let entries=getEntries();
+  const search=(document.getElementById('searchBox')?.value||'').toLowerCase();
+  const year=document.getElementById('yearFilter')?.value||'';
+  if(search) entries=entries.filter(e=>(e.place||'').toLowerCase().includes(search)||(e.date||'').includes(search));
+  if(year)   entries=entries.filter(e=>e.date?.startsWith(year));
+  entries=[...entries].reverse();
+  const total=entries.length, pages=Math.ceil(total/PAGE_SIZE)||1;
+  if(currentPage>pages) currentPage=1;
+  const start=(currentPage-1)*PAGE_SIZE;
+  const paged=entries.slice(start,start+PAGE_SIZE);
+  const tbody=document.getElementById('tableBody');
+  if(!paged.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="emoji">🔍</div>No entries found</div></td></tr>`;}
+  else tbody.innerHTML=paged.map(e=>`<tr>
+    <td>${e.date||'—'}</td>
+    <td>${u.fmt(e.km)}</td>
+    <td>${e.fuel!=null?u.fmt(e.fuel,2):'—'}</td>
+    <td>${e.price>0?u.currencySymbol+u.fmt(e.price,2):'Free'}</td>
+    <td>${e.total_km!=null?u.fmt(e.total_km)+' '+u.distance:'—'}</td>
+    <td class="${getEffClass(e.mileage)}">${e.mileage!=null?u.fmt(e.mileage,1)+' '+u.efficiency:'—'}</td>
+    <td>${e.amount!=null?u.fmtCur(e.amount):'—'}</td>
+    <td class="place-cell">${e.place||''}</td>
+    <td><div class="row-actions">
+      <button class="btn-icon" onclick="editEntry('${e.id}')" title="Edit">✏</button>
+      <button class="btn-icon del" onclick="deleteEntry('${e.id}')" title="Delete">✕</button>
+    </div></td></tr>`).join('');
+  document.getElementById('pgInfo').textContent=`${total} entries · ${start+1}–${Math.min(start+PAGE_SIZE,total)}`;
+  const pgDiv=document.getElementById('pgButtons');
+  let h=`<button class="pg-btn" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>‹</button>`;
+  getPgRange(currentPage,pages).forEach(p=>{if(p==='...')h+=`<span style="padding:0 3px;color:var(--text3)">…</span>`;else h+=`<button class="pg-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;});
+  h+=`<button class="pg-btn" onclick="goPage(${currentPage+1})" ${currentPage>=pages?'disabled':''}>›</button>`;
+  pgDiv.innerHTML=h;
+}
+function getPgRange(cur,total){if(total<=7)return Array.from({length:total},(_,i)=>i+1);if(cur<=4)return[1,2,3,4,5,'...',total];if(cur>=total-3)return[1,'...',total-4,total-3,total-2,total-1,total];return[1,'...',cur-1,cur,cur+1,'...',total];}
+function goPage(p){const pages=Math.ceil(getEntries().length/PAGE_SIZE)||1;if(p<1||p>pages)return;currentPage=p;renderTable();}
+
+// ── ADD/EDIT FUEL ENTRY ───────────────────────────────────────
+function updateEntryCarNote(){
+  const car=getData().cars.find(c=>c.id===activeCar);
+  const n=document.getElementById('entryCarNote');
+  if(car) n.textContent=`⚡ Saving to: ${car.name} ${car.country==='US'?'🇺🇸':'🇮🇳'} — Change active car in the Cars tab`;
+  else n.textContent='⚠ No active car. Go to Cars tab to set one.';
+}
+
+function getPrevKm(currentKm,forId){
+  const entries=getValidEntries(activeCar);
+  if(!entries.length)return null;
+  if(forId){const idx=entries.findIndex(e=>e.id===forId);return idx>0?entries[idx-1].km:null;}
+  if(!currentKm||isNaN(currentKm))return entries[entries.length-1].km;
+  const prev=[...entries].filter(e=>e.km<currentKm).slice(-1)[0];
+  return prev?prev.km:null;
+}
+
+function updatePreview(){
+  const u=getUnits(activeCar);
+  const km=parseFloat(document.getElementById('fKm').value);
+  const fuel=parseFloat(document.getElementById('fFuel').value);
+  const price=parseFloat(document.getElementById('fPrice').value);
+  const prevKm=getPrevKm(km,editingId);
+  const dist=(km&&prevKm&&km>prevKm)?km-prevKm:null;
+  const eff=(dist&&fuel&&fuel>0)?(dist/fuel).toFixed(1):null;
+  const amount=(fuel&&price&&price>0)?(fuel*price).toFixed(0):null;
+  document.getElementById('prevDist').textContent=dist?u.fmt(dist)+' '+u.distance:'—';
+  document.getElementById('prevMileage').textContent=eff?eff+' '+u.efficiency:'—';
+  document.getElementById('prevAmount').textContent=amount?u.fmtCur(+amount):'—';
+}
+
+function saveEntry(){
+  const u=getUnits(activeCar);
+  const date=document.getElementById('fDate').value;
+  const km=parseFloat(document.getElementById('fKm').value);
+  const fuel=parseFloat(document.getElementById('fFuel').value);
+  const price=parseFloat(document.getElementById('fPrice').value)||0;
+  const place=document.getElementById('fPlace').value.trim();
+  if(!date||!km||!fuel){showToast('⚠ Date, odometer and fuel are required',true);return;}
+  if(!activeCar){showToast('⚠ No active car. Set one in the Cars tab.',true);return;}
+  const data=getData();
+  if(!data.entries[activeCar])data.entries[activeCar]=[];
+  const prevKm=getPrevKm(km,editingId);
+  const total_km=(prevKm&&km>prevKm)?km-prevKm:null;
+  const mileage=(total_km&&fuel&&fuel>0)?+(total_km/fuel).toFixed(2):null;
+  const amount=fuel&&price?+(fuel*price).toFixed(2):null;
+  const entry={id:editingId||'e'+Date.now(),date,km,fuel,price,total_km,mileage,amount,place};
+  if(editingId){const i=data.entries[activeCar].findIndex(e=>e.id===editingId);if(i>=0)data.entries[activeCar][i]=entry;editingId=null;document.getElementById('formTitle').textContent='➕ Add Fuel Entry';}
+  else data.entries[activeCar].push(entry);
+  saveData(data); resetForm(); renderAll(); showToast('✅ Fuel entry saved!');
+}
+
+function editEntry(id){
+  const data=getData(); let fc=null;
+  for(const c of data.cars){if((data.entries[c.id]||[]).find(e=>e.id===id)){fc=c.id;break;}}
+  if(!fc)return;
+  viewCar=fc; activeCar=fc;
+  const e=getEntries(fc).find(x=>x.id===id);
+  if(!e)return;
+  editingId=id;
+  document.getElementById('fDate').value=e.date||'';
+  document.getElementById('fKm').value=e.km||'';
+  document.getElementById('fFuel').value=e.fuel||'';
+  document.getElementById('fPrice').value=e.price||'';
+  document.getElementById('fPlace').value=e.place||'';
+  document.getElementById('formTitle').textContent='✏ Edit Entry';
+  updatePreview(); updateFormLabels();
+  showPage('addEntry',document.querySelectorAll('nav button')[2]);
+}
+
+function resetForm(){
+  editingId=null;
+  ['fDate','fKm','fFuel','fPrice','fPlace'].forEach(id=>document.getElementById(id).value='');
+  ['prevDist','prevMileage','prevAmount'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('formTitle').textContent='➕ Add Fuel Entry';
+  document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
+}
+
+function deleteEntry(id){deleteId=id;document.getElementById('deleteModal').classList.add('open');}
+function confirmDelete(){
+  const data=getData();
+  if(data.entries[viewCar])data.entries[viewCar]=data.entries[viewCar].filter(e=>e.id!==deleteId);
+  saveData(data);renderAll();showToast('🗑 Entry deleted');closeModal('deleteModal');deleteId=null;
+}
+
+// ── SERVICE ───────────────────────────────────────────────────
+function renderServiceTable(){
+  const u=getUnits(viewCar);
+  const entries=getServiceEntries();
+  const tbody=document.getElementById('serviceTableBody');
+  if(!entries.length){tbody.innerHTML=`<tr><td colspan="5"><div class="empty-state"><div class="emoji">🔧</div>No service entries yet</div></td></tr>`;return;}
+  tbody.innerHTML=[...entries].reverse().map(s=>`<tr>
+    <td>${s.date||'—'}</td>
+    <td>${s.km?u.fmt(s.km)+' '+u.distance:'—'}</td>
+    <td style="color:var(--purple)">${s.amount?u.fmtCur(s.amount):'—'}</td>
+    <td class="remarks-cell" title="${s.remarks||''}">${s.remarks||''}</td>
+    <td><div class="row-actions">
+      <button class="btn-icon" onclick="editService('${s.id}')" title="Edit">✏</button>
+      <button class="btn-icon del" onclick="deleteService('${s.id}')" title="Delete">✕</button>
+    </div></td></tr>`).join('');
+}
+
+function saveService(){
+  const date=document.getElementById('sDate').value;
+  const km=parseFloat(document.getElementById('sKm').value)||null;
+  const amount=parseFloat(document.getElementById('sAmount').value)||null;
+  const remarks=document.getElementById('sRemarks').value.trim();
+  if(!date||!amount){showToast('⚠ Date and Amount are required',true);return;}
+  if(!activeCar){showToast('⚠ No active car. Set one in the Cars tab.',true);return;}
+  const data=getData();
+  if(!data.service)data.service={};
+  if(!data.service[activeCar])data.service[activeCar]=[];
+  const entry={id:editingSvcId||'sv'+Date.now(),date,km,amount,remarks};
+  if(editingSvcId){const i=data.service[activeCar].findIndex(s=>s.id===editingSvcId);if(i>=0)data.service[activeCar][i]=entry;editingSvcId=null;document.getElementById('svcFormTitle').textContent='🔧 Add Service Entry';}
+  else data.service[activeCar].push(entry);
+  saveData(data);resetServiceForm();renderAll();showToast('✅ Service entry saved!');
+}
+
+function editService(id){
+  const s=getServiceEntries().find(x=>x.id===id); if(!s)return;
+  editingSvcId=id;
+  document.getElementById('sDate').value=s.date||'';
+  document.getElementById('sKm').value=s.km||'';
+  document.getElementById('sAmount').value=s.amount||'';
+  document.getElementById('sRemarks').value=s.remarks||'';
+  document.getElementById('svcFormTitle').textContent='✏ Edit Service Entry';
+}
+function resetServiceForm(){
+  editingSvcId=null;
+  ['sDate','sKm','sAmount','sRemarks'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('svcFormTitle').textContent='🔧 Add Service Entry';
+  document.getElementById('sDate').value=new Date().toISOString().slice(0,10);
+}
+function deleteService(id){deleteSvcId=id;document.getElementById('deleteSvcModal').classList.add('open');}
+function confirmDeleteSvc(){
+  const data=getData();
+  if(data.service&&data.service[viewCar])data.service[viewCar]=data.service[viewCar].filter(s=>s.id!==deleteSvcId);
+  saveData(data);renderAll();showToast('🗑 Service entry deleted');closeModal('deleteSvcModal');deleteSvcId=null;
+}
+
+// ── REPORTS ───────────────────────────────────────────────────
+function renderReports(){
+  const u=getUnits(viewCar);
+  const entries=getValidEntries(), svc=getServiceEntries();
+  // Report labels
+  document.getElementById('reportKmTitle').textContent=`${u.distLabel} Travelled by Year`;
+  document.getElementById('yearMileageChartTitle').innerHTML=`Avg ${u.effLabel} by Year <span style="color:var(--text2);font-size:.76rem;font-weight:400">${u.efficiency}</span>`;
+  document.getElementById('yearTableHead').innerHTML=`<th>Year</th><th>Entries</th><th>${u.distLabel}</th><th>Fuel (${u.fuel})</th><th>Fuel Spend</th><th>Svc Spend</th><th>Total</th><th>${u.effLabel}</th><th>${u.currencySymbol}/${u.fuel}</th>`;
+
+  if(!entries.length)return;
+  const byYear={};
+  entries.forEach(e=>{const y=e.date?.slice(0,4);if(!y)return;if(!byYear[y])byYear[y]=[];byYear[y].push(e);});
+  const years=Object.keys(byYear).sort();
+  const yearDist={};
+  years.forEach(y=>{const ye=byYear[y];const kms=ye.map(e=>e.km).filter(k=>k>0).sort((a,b)=>a-b);yearDist[y]=kms.length>1?kms[kms.length-1]-kms[0]:ye.reduce((s,e)=>s+(e.total_km||0),0);});
+  const yearSpend={};years.forEach(y=>yearSpend[y]=byYear[y].reduce((s,e)=>s+(e.amount||0),0));
+  const svcByYear={};svc.forEach(e=>{const y=e.date?.slice(0,4);if(!y)return;svcByYear[y]=(svcByYear[y]||0)+(e.amount||0);});
+  const maxDist=Math.max(...Object.values(yearDist));
+  const maxSpend=Math.max(...Object.values(yearSpend));
+
+  document.getElementById('yearList').innerHTML=years.map(y=>`<div class="year-item"><div class="year-badge">${y}</div><div class="year-bar-wrap"><div class="year-bar" style="width:${Math.round(yearDist[y]/maxDist*100)}%"></div></div><div class="year-km">${u.fmt(yearDist[y])} ${u.distance}</div></div>`).join('');
+  document.getElementById('spendList').innerHTML=years.map(y=>`<div class="year-item"><div class="year-badge">${y}</div><div class="year-bar-wrap"><div class="year-bar" style="width:${Math.round(yearSpend[y]/maxSpend*100)}%;background:linear-gradient(90deg,#3b82f6,#8b5cf6)"></div></div><div class="year-km">${u.fmtCur(yearSpend[y])}</div></div>`).join('');
+
+  document.getElementById('yearTableBody').innerHTML=[...years].reverse().map(y=>{
+    const ye=byYear[y];
+    const tF=ye.reduce((s,e)=>s+(e.fuel||0),0);
+    const tS=ye.reduce((s,e)=>s+(e.amount||0),0);
+    const tSvc=svcByYear[y]||0;
+    const effs=ye.filter(e=>e.mileage&&e.mileage>0).map(e=>e.mileage);
+    const avgE=effs.length?effs.reduce((a,b)=>a+b,0)/effs.length:null;
+    const prices=ye.filter(e=>e.price>0).map(e=>e.price);
+    const avgP=prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:null;
+    return `<tr><td style="font-family:Syne,sans-serif;font-weight:700">${y}</td><td>${ye.length}</td><td>${u.fmt(yearDist[y])} ${u.distance}</td><td>${u.fmt(tF,1)} ${u.fuel}</td><td>${u.fmtCur(tS)}</td><td style="color:var(--purple)">${tSvc?u.fmtCur(tSvc):'—'}</td><td>${u.fmtCur(tS+tSvc)}</td><td class="${getEffClass(avgE)}">${avgE?u.fmt(avgE,1)+' '+u.efficiency:'—'}</td><td>${avgP?u.currencySymbol+u.fmt(avgP,2):'—'}</td></tr>`;
+  }).join('');
+
+  const placeCounts={};entries.forEach(e=>{if(!e.place?.trim())return;const p=e.place.trim();placeCounts[p]=(placeCounts[p]||0)+1;});
+  document.getElementById('topPlaces').innerHTML=Object.entries(placeCounts).sort((a,b)=>b[1]-a[1]).slice(0,8)
+    .map(([n,c])=>`<div class="place-row"><span>⛽ ${n}</span><span style="font-family:DM Mono,monospace;color:var(--text2);font-size:.76rem">${c} fill-ups</span></div>`).join('')||'<div class="empty-state">No place data yet</div>';
+
+  const avgEffByYear=years.map(y=>{const ms=byYear[y].filter(e=>e.mileage&&e.mileage>0).map(e=>e.mileage);return ms.length?+(ms.reduce((a,b)=>a+b,0)/ms.length).toFixed(1):null;});
+  destroyChart('chartYearMileage');
+  const ctx=document.getElementById('chartYearMileage').getContext('2d');
+  const gridColor=getComputedStyle(document.body).getPropertyValue('--chart-grid').trim()||'rgba(255,255,255,.04)';
+  charts['chartYearMileage']=new Chart(ctx,{type:'bar',data:{labels:years,datasets:[{data:avgEffByYear,backgroundColor:avgEffByYear.map(v=>v>=u.effGood?'rgba(34,197,94,.55)':'rgba(240,165,0,.55)'),borderColor:avgEffByYear.map(v=>v>=u.effGood?'#22c55e':'#f0a500'),borderWidth:1,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:gridColor},ticks:{color:'var(--text3)',font:{size:10}}},y:{grid:{color:gridColor},ticks:{color:'var(--text3)',font:{size:10}}}}}});
+}
+
+// ── CARS PAGE ─────────────────────────────────────────────────
+function renderCarsPage(){
+  const data=getData(); const div=document.getElementById('carsList');
+  if(!data.cars.length){div.innerHTML='<div class="empty-state"><div class="emoji">🚗</div>No cars yet</div>';return;}
+  div.innerHTML=data.cars.map(car=>{
+    const u=getUnits(car.id);
+    const e=(data.entries[car.id]||[]).filter(e=>e.km>0).sort((a,b)=>a.km-b.km);
+    const totalDist=e.length>1?e[e.length-1].km-e[0].km:0;
+    const tFuel=(data.entries[car.id]||[]).reduce((s,e)=>s+(e.amount||0),0);
+    const tSvc=(data.service?.[car.id]||[]).reduce((s,e)=>s+(e.amount||0),0);
+    const isCur=car.id===activeCar;
+    const flag=car.country==='US'?'🇺🇸':'🇮🇳';
+    const countryLabel=car.country==='US'?'USA ($, mi, gal)':'India (₹, km, L)';
+    return `<div class="car-card ${isCur?'is-current':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:7px">
+        <div style="font-family:Syne,sans-serif;font-size:.95rem;font-weight:700">${flag} ${car.name}</div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          ${isCur?'<span class="badge badge-current">✦ ACTIVE</span>':''}
+          <span class="badge ${car.country==='US'?'badge-us':'badge-in'}">${countryLabel}</span>
+          <span class="badge ${car.sold?'badge-sold':'badge-active'}">${car.sold?'SOLD':'OWNED'}</span>
+          ${!isCur?`<button class="btn-secondary" onclick="setActiveCar('${car.id}')" style="padding:4px 11px;font-size:.76rem">Set Active</button>`:''}
+        </div>
+      </div>
+      <div class="svc-summary">
+        <div class="svc-summary-item"><div class="lbl">Purchased</div><div class="val">${car.purchased||'—'}</div></div>
+        <div class="svc-summary-item"><div class="lbl">Distance</div><div class="val">${u.fmt(totalDist)} ${u.distance}</div></div>
+        <div class="svc-summary-item"><div class="lbl">Fuel Spend</div><div class="val">${u.fmtCur(tFuel)}</div></div>
+        <div class="svc-summary-item"><div class="lbl">Svc Spend</div><div class="val">${u.fmtCur(tSvc)}</div></div>
+        <div class="svc-summary-item"><div class="lbl">Total Spend</div><div class="val">${u.fmtCur(tFuel+tSvc)}</div></div>
+        <div class="svc-summary-item"><div class="lbl">Services</div><div class="val">${(data.service?.[car.id]||[]).length}</div></div>
+      </div>
+      ${car.note?`<div class="car-note">${car.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function setActiveCar(id){
+  const data=getData();
+  data.cars.forEach(c=>delete c.active);
+  const car=data.cars.find(c=>c.id===id);
+  if(car)car.active=true;
+  activeCar=id; viewCar=id;
+  saveData(data); renderAll();
+  showToast(`✅ Active car: ${car.name}`);
+}
+
+// ── NEW CAR ───────────────────────────────────────────────────
+let selectedCountry='IN';
+function selectCountry(c){
+  selectedCountry=c;
+  document.getElementById('ncCountry').value=c;
+  document.getElementById('btnIN').classList.toggle('active',c==='IN');
+  document.getElementById('btnUS').classList.toggle('active',c==='US');
+}
+function showNewCarModal(){
+  selectedCountry='IN';
+  document.getElementById('btnIN').classList.add('active');
+  document.getElementById('btnUS').classList.remove('active');
+  document.getElementById('newCarModal').classList.add('open');
+}
+function addNewCar(){
+  const name=document.getElementById('ncName').value.trim();
+  const purchased=document.getElementById('ncPurchased').value;
+  const reg=document.getElementById('ncReg').value.trim();
+  const country=selectedCountry;
+  if(!name){showToast('⚠ Please enter a car name',true);return;}
+  const data=getData();
+  const id='car_'+Date.now();
+  data.cars.forEach(c=>delete c.active);
+  data.cars.push({id,name,purchased,reg,country,active:true,note:reg?'Reg: '+reg:''});
+  if(!data.entries)data.entries={};if(!data.service)data.service={};
+  data.entries[id]=[]; data.service[id]=[];
+  activeCar=id; viewCar=id;
+  saveData(data); closeModal('newCarModal');
+  ['ncName','ncPurchased','ncReg'].forEach(x=>document.getElementById(x).value='');
+  renderAll();
+  const flag=country==='US'?'🇺🇸':'🇮🇳';
+  showToast(`✅ ${flag} ${name} added and set as active car!`);
+}
+
+// ── UTILS ─────────────────────────────────────────────────────
+function populatePlaceList(){
+  const places=[...new Set(getEntries().map(e=>e.place).filter(Boolean))].sort();
+  document.getElementById('placeList').innerHTML=places.map(p=>`<option value="${p}">`).join('');
+}
+function exportCSV(){
+  const u=getUnits(viewCar); const entries=getEntries();
+  const header=`Date,${u.distLabel},Fuel(${u.fuel}),Price/${u.fuel},Distance(${u.distance}),${u.effLabel},Amount,Place`;
+  const rows=entries.map(e=>[e.date,e.km,e.fuel,e.price,e.total_km,e.mileage,e.amount,`"${e.place||''}"`].join(','));
+  const blob=new Blob([[header,...rows].join('\n')],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`fuellog_${viewCar}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+function showToast(msg,isError=false){
+  const t=document.getElementById('toast'); t.textContent=msg;
+  t.className='toast show'+(isError?' error':'');
+  setTimeout(()=>t.className='toast',3000);
+}
+document.getElementById('fDate').value=new Date().toISOString().slice(0,10);
+document.getElementById('sDate').value=new Date().toISOString().slice(0,10);
+
+// ── LOGOUT ────────────────────────────────────────────────────
+function doLogout(){
+  sessionStorage.removeItem('fl_auth');
+  window.location.href = 'index.html';
+}
+</script>
+</body>
+</html>
