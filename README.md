@@ -75,7 +75,7 @@ npm run build
 ```
 
 ## Phase 2 (Future)
-- Replace localStorage with SQLite database
+- Replace localStorage with PostgreSQL database
 - Add Node.js backend API
 - Proper user authentication
 - Email reports feature
