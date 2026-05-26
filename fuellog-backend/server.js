@@ -45,17 +45,21 @@ app.use(cors({
 app.use(express.json());
 
 // ── Routes ───────────────────────────────────────────────────
-const authRoutes    = require('./routes/auth');
-const carsRoutes    = require('./routes/cars');
-const fuelRoutes    = require('./routes/fuel');
-const serviceRoutes = require('./routes/service');
-const reportsRoutes = require('./routes/reports');
+const authMiddleware = require('./middleware/auth');
+const authRoutes     = require('./routes/auth');
+const carsRoutes     = require('./routes/cars');
+const fuelRoutes     = require('./routes/fuel');
+const serviceRoutes  = require('./routes/service');
+const reportsRoutes  = require('./routes/reports');
 
-app.use('/api/auth',    authRoutes);
-app.use('/api/cars',    carsRoutes);
-app.use('/api/fuel',    fuelRoutes);
-app.use('/api/service', serviceRoutes);
-app.use('/api/reports', reportsRoutes);
+// Public routes — no token required
+app.use('/api/auth', authRoutes);
+
+// Protected routes — token required for all below
+app.use('/api/cars',    authMiddleware, carsRoutes);
+app.use('/api/fuel',    authMiddleware, fuelRoutes);
+app.use('/api/service', authMiddleware, serviceRoutes);
+app.use('/api/reports', authMiddleware, reportsRoutes);
 
 // ── Health check endpoint ────────────────────────────────────
 app.get('/api/health', async (req, res) => {

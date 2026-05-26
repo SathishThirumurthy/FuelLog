@@ -1,39 +1,46 @@
+// ============================================================
+//  FuelLog Frontend — src/components/AddEntry.tsx
+//  Updated to save fuel entries to API
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react';
-import { FuelLogData, Car, FuelEntry } from '../types';
-import { getUnits } from '../utils/units';
+import { FuelLogData, Car }              from '../types';
+import { getUnits }                      from '../utils/units';
+import { fuelAPI }                       from '../utils/api';
 
 interface Props {
-  data: FuelLogData;
-  activeCar: Car | null;
-  editingId: string | null;
-  onSaved: (data: FuelLogData) => void;
+  data:        FuelLogData;
+  activeCar:   Car | null;
+  editingId:   string | null;
+  onSaved:     () => Promise<void>;
   onClearEdit: () => void;
-  onToast: (msg: string, isError?: boolean) => void;
+  onToast:     (msg: string, isError?: boolean) => void;
 }
 
-export default function AddEntry({ data, activeCar, editingId, onSaved, onClearEdit, onToast }: Props) {
+export default function AddEntry({
+  data, activeCar, editingId, onSaved, onClearEdit, onToast,
+}: Props) {
   const today = new Date().toISOString().slice(0, 10);
-  const u = getUnits(activeCar ?? undefined);
+  const u     = getUnits(activeCar ?? undefined);
 
-  const [date,  setDate]  = useState(today);
-  const [km,    setKm]    = useState('');
-  const [fuel,  setFuel]  = useState('');
-  const [price, setPrice] = useState('');
-  const [place, setPlace] = useState('');
+  const [date,   setDate]   = useState(today);
+  const [km,     setKm]     = useState('');
+  const [fuel,   setFuel]   = useState('');
+  const [price,  setPrice]  = useState('');
+  const [place,  setPlace]  = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // Populate form when editing
   useEffect(() => {
     if (!editingId) {
       setDate(today); setKm(''); setFuel(''); setPrice(''); setPlace('');
       return;
     }
-    // find entry across all cars
     for (const cid of Object.keys(data.entries)) {
       const e = data.entries[cid].find(x => x.id === editingId);
       if (e) {
-        setDate(e.date || '');
-        setKm(String(e.km || ''));
-        setFuel(String(e.fuel || ''));
+        setDate(e.date   || '');
+        setKm(String(e.km    || ''));
+        setFuel(String(e.fuel  || ''));
         setPrice(String(e.price || ''));
         setPlace(e.place || '');
         break;
@@ -42,14 +49,19 @@ export default function AddEntry({ data, activeCar, editingId, onSaved, onClearE
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId]);
 
-  // All known places for datalist
   const places = useMemo(() => {
     const carId = activeCar?.id ?? '';
-    return [...new Set((data.entries[carId] || []).map(e => e.place).filter(Boolean))].sort();
+    return [
+      ...new Set(
+        (data.entries[carId] || []).map(e => e.place).filter(Boolean)
+      ),
+    ].sort();
   }, [data, activeCar]);
 
   function getValidEntries(carId: string) {
-    return (data.entries[carId] || []).filter(e => e.km && e.km > 0).sort((a, b) => a.km - b.km);
+    return (data.entries[carId] || [])
+      .filter(e => e.km && e.km > 0)
+      .sort((a, b) => a.km - b.km);
   }
 
   function getPrevKm(currentKm: number, forId: string | null, carId: string): number | null {
@@ -73,36 +85,43 @@ export default function AddEntry({ data, activeCar, editingId, onSaved, onClearE
   const eff      = (dist && fuelNum && fuelNum > 0) ? (dist / fuelNum).toFixed(1) : null;
   const amount   = (fuelNum && priceNum && priceNum > 0) ? (fuelNum * priceNum).toFixed(0) : null;
 
-  function handleSave() {
+  async function handleSave() {
     if (!date || !km || !fuel) {
-      onToast('⚠ Date, odometer and fuel are required', true); return;
+      onToast('⚠ Date, odometer and fuel are required', true);
+      return;
     }
     if (!activeCar) {
-      onToast('⚠ No active car. Set one in the Cars tab.', true); return;
+      onToast('⚠ No active car. Set one in the Cars tab.', true);
+      return;
     }
-    const d = { ...data, entries: { ...data.entries } };
-    if (!d.entries[carId]) d.entries[carId] = [];
 
     const total_km = (prevKm && kmNum > prevKm) ? kmNum - prevKm : null;
-    const mileage  = (total_km && fuelNum && fuelNum > 0) ? +(total_km / fuelNum).toFixed(2) : null;
+    const mileage  = (total_km && fuelNum && fuelNum > 0)
+      ? +(total_km / fuelNum).toFixed(2) : null;
     const amt      = fuelNum && priceNum ? +(fuelNum * priceNum).toFixed(2) : null;
 
-    const entry: FuelEntry = {
-      id: editingId || 'e' + Date.now(),
-      date, km: kmNum, fuel: fuelNum, price: priceNum || 0,
-      total_km, mileage, amount: amt, place,
-    };
-
-    if (editingId) {
-      const idx = d.entries[carId].findIndex(e => e.id === editingId);
-      if (idx >= 0) d.entries[carId][idx] = entry;
-    } else {
-      d.entries[carId] = [...d.entries[carId], entry];
+    setSaving(true);
+    try {
+      if (editingId) {
+        await fuelAPI.update(editingId, {
+          date, km: kmNum, fuel: fuelNum,
+          price: priceNum || 0, total_km, mileage, amount: amt, place,
+        });
+      } else {
+        await fuelAPI.add({
+          car_id: activeCar.id, date,
+          km: kmNum, fuel: fuelNum, price: priceNum || 0,
+          total_km, mileage, amount: amt, place,
+        });
+      }
+      setDate(today); setKm(''); setFuel(''); setPrice(''); setPlace('');
+      onClearEdit();
+      await onSaved();
+    } catch (err: any) {
+      onToast(`❌ ${err.message}`, true);
+    } finally {
+      setSaving(false);
     }
-
-    onSaved(d);
-    setDate(today); setKm(''); setFuel(''); setPrice(''); setPlace('');
-    onClearEdit();
   }
 
   function handleReset() {
@@ -110,11 +129,11 @@ export default function AddEntry({ data, activeCar, editingId, onSaved, onClearE
     onClearEdit();
   }
 
-  const isEditing = !!editingId;
-
   return (
     <div className="form-card">
-      <div className="form-title">{isEditing ? '✏ Edit Entry' : '➕ Add Fuel Entry'}</div>
+      <div className="form-title">
+        {editingId ? '✏ Edit Entry' : '➕ Add Fuel Entry'}
+      </div>
 
       <div className="entry-note">
         {activeCar
@@ -126,35 +145,28 @@ export default function AddEntry({ data, activeCar, editingId, onSaved, onClearE
       <div className="form-grid">
         <div className="form-group">
           <label>Date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} />
+          <input type="date" value={date}
+            onChange={e => setDate(e.target.value)} disabled={saving} />
         </div>
         <div className="form-group">
           <label>Odometer ({u.distance})</label>
-          <input
-            type="number" placeholder={u.placeholder_km}
-            value={km} onChange={e => setKm(e.target.value)}
-          />
+          <input type="number" placeholder={u.placeholder_km}
+            value={km} onChange={e => setKm(e.target.value)} disabled={saving} />
         </div>
         <div className="form-group">
           <label>Fuel ({u.fuel})</label>
-          <input
-            type="number" placeholder={u.placeholder_fuel} step="0.01"
-            value={fuel} onChange={e => setFuel(e.target.value)}
-          />
+          <input type="number" placeholder={u.placeholder_fuel} step="0.01"
+            value={fuel} onChange={e => setFuel(e.target.value)} disabled={saving} />
         </div>
         <div className="form-group">
           <label>Price/{u.fuel} ({u.currencySymbol})</label>
-          <input
-            type="number" placeholder={u.placeholder_price} step="0.01"
-            value={price} onChange={e => setPrice(e.target.value)}
-          />
+          <input type="number" placeholder={u.placeholder_price} step="0.01"
+            value={price} onChange={e => setPrice(e.target.value)} disabled={saving} />
         </div>
         <div className="form-group full">
           <label>Fuel Station / Place</label>
-          <input
-            type="text" list="placeList"
-            value={place} onChange={e => setPlace(e.target.value)}
-          />
+          <input type="text" list="placeList"
+            value={place} onChange={e => setPlace(e.target.value)} disabled={saving} />
           <datalist id="placeList">
             {places.map(p => <option key={p} value={p} />)}
           </datalist>
@@ -177,8 +189,13 @@ export default function AddEntry({ data, activeCar, editingId, onSaved, onClearE
       </div>
 
       <div className="form-actions">
-        <button className="btn-primary" onClick={handleSave}>Save Entry</button>
-        <button className="btn-secondary" onClick={handleReset}>Clear</button>
+        <button className="btn-primary" onClick={handleSave}
+          disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
+          {saving ? 'Saving...' : 'Save Entry'}
+        </button>
+        <button className="btn-secondary" onClick={handleReset} disabled={saving}>
+          Clear
+        </button>
       </div>
     </div>
   );
